@@ -68,13 +68,23 @@ export function SignUpForm() {
       } else {
         router.push('/login');
       }
-    } catch {
+    } catch (err: unknown) {
       setServerError('An unexpected error occurred. Please try again.');
+      const errData = err && typeof err === 'object' && 'data' in err ? (err as { data?: { correlationId?: string } }).data : undefined;
+      setCorrelationId(errData?.correlationId ?? null);
     }
   };
 
   const copyCorrelationId = () => {
-    if (correlationId) navigator.clipboard.writeText(correlationId);
+    if (!correlationId) return;
+    navigator.clipboard.writeText(correlationId);
+  };
+
+  const copyErrorDetails = () => {
+    const text = correlationId
+      ? `Error: ${serverError}\nCorrelation ID: ${correlationId}`
+      : `Error: ${serverError}`;
+    navigator.clipboard.writeText(text);
   };
 
   const stagger = (i: number) => ({
@@ -100,20 +110,47 @@ export function SignUpForm() {
           {serverError && (
             <Alert variant="destructive" className="animate-in fade-in-0">
               <AlertTitle>Error</AlertTitle>
-              <AlertDescription>
-                {serverError}
-                {correlationId && (
-                  <span
-                    className="ml-2 text-xs text-muted-foreground cursor-pointer underline"
-                    title="Copy correlation ID for support"
-                    onClick={copyCorrelationId}
-                    onKeyDown={(e) => e.key === 'Enter' && copyCorrelationId()}
-                    role="button"
-                    tabIndex={0}
-                  >
-                    (Correlation ID: {correlationId})
-                  </span>
-                )}
+              <AlertDescription className="space-y-2">
+                  <p>{serverError}</p>
+                  <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-destructive/20">
+                    {correlationId ? (
+                      <>
+                        <span className="text-xs text-muted-foreground">
+                          Correlation ID (share with support):
+                        </span>
+                        <code
+                          className="text-xs px-1.5 py-0.5 rounded bg-destructive/20 font-mono break-all"
+                          title="Click to copy. Share this ID with customer support to help them find your request."
+                        >
+                          {correlationId}
+                        </code>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs shrink-0"
+                          onClick={copyCorrelationId}
+                          title="Copy correlation ID to share with customer support"
+                        >
+                          Copy ID
+                        </Button>
+                      </>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        No correlation ID. When contacting support, describe what you were doing.
+                      </p>
+                    )}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs shrink-0"
+                      onClick={copyErrorDetails}
+                      title="Copy error message and correlation ID (if any) for support"
+                    >
+                      Copy details
+                    </Button>
+                  </div>
               </AlertDescription>
             </Alert>
           )}

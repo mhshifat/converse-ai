@@ -1,10 +1,10 @@
 import { z } from 'zod';
 import { nanoid } from 'nanoid';
 import { publicProcedure, router } from '../trpc';
-import { AuthProviderFactory } from '../../../auth/auth-provider-factory';
-import { prisma } from '../../../lib/prisma';
-import { generateCorrelationId } from '../../../lib/logging/correlation-id';
-import { sessionOptions, SessionUser } from '../../../lib/session';
+import { AuthProviderFactory } from '../../auth/auth-provider-factory';
+import { prisma } from '../../lib/prisma';
+import { generateCorrelationId } from '../../lib/logging/correlation-id';
+import { sessionOptions, SessionUser } from '../../lib/session';
 import { getIronSession } from 'iron-session';
 import { cookies } from 'next/headers';
 
@@ -40,7 +40,7 @@ export const authRouter = router({
           return { success: false, error: result.error, correlationId };
         }
         // Set session cookie with permissions
-        const session = await getIronSession(cookies(), sessionOptions);
+        const session = await getIronSession(await cookies(), sessionOptions);
         session.user = {
           id: result.user.id,
           email: result.user.email,
@@ -69,7 +69,7 @@ export const authRouter = router({
           return { success: false, error: result.error, correlationId };
         }
         // Set session cookie with permissions
-        const session = await getIronSession(cookies(), sessionOptions);
+        const session = await getIronSession(await cookies(), sessionOptions);
         session.user = {
           id: result.user.id,
           email: result.user.email,
@@ -85,12 +85,12 @@ export const authRouter = router({
       }
     }),
   logout: publicProcedure.mutation(async () => {
-    const session = await getIronSession(cookies(), sessionOptions);
+    const session = await getIronSession(await cookies(), sessionOptions);
     session.destroy();
     return { success: true };
   }),
   me: publicProcedure.query(async () => {
-    const session = await getIronSession(cookies(), sessionOptions);
+    const session = await getIronSession(await cookies(), sessionOptions);
     return { user: session.user || null };
   }),
 });

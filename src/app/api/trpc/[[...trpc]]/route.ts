@@ -1,8 +1,8 @@
-import { appRouter } from '../../../server/routers/app-router';
+import { appRouter } from '../../../../server/routers/app-router';
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
 import { getIronSession } from 'iron-session';
 import { cookies } from 'next/headers';
-import { sessionOptions } from '../../../lib/session';
+import { sessionOptions } from '../../../../lib/session';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
