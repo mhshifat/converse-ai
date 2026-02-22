@@ -1,0 +1,106 @@
+// Prisma schema for multi-tenant chatbot automation platform
+// All table and field names are snake_case as per requirements
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model tenant {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+  users       user[]
+  projects    project[]
+  agents      agent[]
+  integrations integration[]
+}
+
+model user {
+  id          String   @id @default(uuid())
+  tenant_id   String
+  email       String   @unique
+  name        String
+  role        String   // 'admin' | 'agent' | 'merchant'
+  password_hash String
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+  tenant      tenant   @relation(fields: [tenant_id], references: [id])
+}
+
+model project {
+  id                       String   @id @default(uuid())
+  tenant_id                String
+  name                     String
+  description              String?
+  data_schema              Json?    // JSON schema for extracting structured data from conversations
+  delivery_integration_ids  Json?    // array of integration ids for email/discord/sms delivery
+  created_at               DateTime @default(now())
+  updated_at               DateTime @updatedAt
+  tenant                   tenant   @relation(fields: [tenant_id], references: [id])
+  chatbots                 chatbot[]
+}
+
+model chatbot {
+  id           String   @id @default(uuid())
+  project_id   String
+  name         String
+  config       Json     // UI: colors, position, welcome_message, voice_enabled
+  api_key      String?  @unique // for widget embed authentication
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+  project      project  @relation(fields: [project_id], references: [id])
+  conversations conversation[]
+}
+
+model agent {
+  id          String   @id @default(uuid())
+  tenant_id   String
+  name        String
+  system_prompt String
+  settings    Json
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+  tenant      tenant   @relation(fields: [tenant_id], references: [id])
+  conversations conversation[] @relation("AgentConversations")
+}
+
+model conversation {
+  id            String   @id @default(uuid())
+  chatbot_id    String
+  customer_id   String
+  agent_id      String
+  channel       String   // 'text' | 'call'
+  status        String   // 'active' | 'closed'
+  compiled_data Json?    // structured data extracted when conversation ends
+  started_at    DateTime @default(now())
+  ended_at      DateTime?
+  chatbot       chatbot  @relation(fields: [chatbot_id], references: [id])
+  agent         agent    @relation("AgentConversations", fields: [agent_id], references: [id])
+  messages      message[]
+}
+
+model message {
+  id               String   @id @default(uuid())
+  conversation_id  String
+  sender_type      String   // 'customer' | 'agent'
+  sender_id        String
+  content          String
+  created_at       DateTime @default(now())
+  conversation     conversation @relation(fields: [conversation_id], references: [id])
+}
+
+model integration {
+  id          String   @id @default(uuid())
+  tenant_id   String
+  type        String   // 'email' | 'discord' | 'sms'
+  config      Json
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+  tenant      tenant   @relation(fields: [tenant_id], references: [id])
+}
