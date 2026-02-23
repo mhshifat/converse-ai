@@ -2,8 +2,26 @@ import { initTRPC } from '@trpc/server';
 import superjson from 'superjson';
 import type { SessionUser } from '../lib/session';
 
+function getCorrelationIdFromCause(cause: unknown): string | undefined {
+  if (cause && typeof cause === 'object' && 'correlationId' in cause) {
+    const id = (cause as { correlationId?: string }).correlationId;
+    return typeof id === 'string' ? id : undefined;
+  }
+  return undefined;
+}
+
 export const t = initTRPC.context<{ user: SessionUser | null }>().create({
   transformer: superjson,
+  errorFormatter({ shape, error }) {
+    const correlationId = getCorrelationIdFromCause(error.cause);
+    return {
+      ...shape,
+      data: {
+        ...shape.data,
+        ...(correlationId && { correlationId }),
+      },
+    };
+  },
 });
 
 export const router = t.router;

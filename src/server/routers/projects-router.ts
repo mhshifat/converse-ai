@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { router, protectedProcedure } from '../trpc';
+import { router, protectedProcedure } from '@/server/trpc';
+import { withCorrelationError, throwNotFoundWithId } from '@/server/trpc-error';
 import * as projectRepo from '../repositories/project-repository';
 
 export const projectsRouter = router({
@@ -14,20 +15,24 @@ export const projectsRouter = router({
         .optional()
     )
     .query(async ({ ctx, input }) => {
-      return projectRepo.listProjects({
-        tenantId: ctx.user.tenantId,
-        page: input?.page,
-        pageSize: input?.pageSize,
-        search: input?.search,
+      return withCorrelationError('projects.list', async () => {
+        return projectRepo.listProjects({
+          tenantId: ctx.user.tenantId,
+          page: input?.page,
+          pageSize: input?.pageSize,
+          search: input?.search,
+        });
       });
     }),
 
   getById: protectedProcedure
     .input(z.object({ id: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
-      const project = await projectRepo.getProjectById(input.id, ctx.user.tenantId);
-      if (!project) throw new Error('Project not found');
-      return project;
+      return withCorrelationError('projects.getById', async (correlationId) => {
+        const project = await projectRepo.getProjectById(input.id, ctx.user.tenantId);
+        if (!project) throwNotFoundWithId(correlationId, 'Project not found');
+        return project;
+      });
     }),
 
   create: protectedProcedure
@@ -38,10 +43,12 @@ export const projectsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      return projectRepo.createProject({
-        tenantId: ctx.user.tenantId,
-        name: input.name,
-        description: input.description,
+      return withCorrelationError('projects.create', async () => {
+        return projectRepo.createProject({
+          tenantId: ctx.user.tenantId,
+          name: input.name,
+          description: input.description,
+        });
       });
     }),
 
@@ -56,17 +63,21 @@ export const projectsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const { id, ...data } = input;
-      const updated = await projectRepo.updateProject(id, ctx.user.tenantId, data);
-      if (!updated) throw new Error('Project not found');
-      return updated;
+      return withCorrelationError('projects.update', async (correlationId) => {
+        const { id, ...data } = input;
+        const updated = await projectRepo.updateProject(id, ctx.user.tenantId, data);
+        if (!updated) throwNotFoundWithId(correlationId, 'Project not found');
+        return updated;
+      });
     }),
 
   delete: protectedProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
-      const deleted = await projectRepo.deleteProject(input.id, ctx.user.tenantId);
-      if (!deleted) throw new Error('Project not found');
-      return { success: true };
+      return withCorrelationError('projects.delete', async (correlationId) => {
+        const deleted = await projectRepo.deleteProject(input.id, ctx.user.tenantId);
+        if (!deleted) throwNotFoundWithId(correlationId, 'Project not found');
+        return { success: true };
+      });
     }),
 });

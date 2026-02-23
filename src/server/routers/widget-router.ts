@@ -1,17 +1,20 @@
 import { z } from 'zod';
-import { router, publicProcedure } from '../trpc';
+import { router, publicProcedure } from '@/server/trpc';
+import { withCorrelationError, throwNotFoundWithId } from '@/server/trpc-error';
 import * as conversationService from '../services/conversation-service';
 
 export const widgetRouter = router({
   getConfig: publicProcedure
     .input(z.object({ apiKey: z.string().min(1) }))
     .query(async ({ input }) => {
-      const chatbot = await conversationService.getChatbotByApiKey(input.apiKey);
-      if (!chatbot) throw new Error('Invalid API key');
-      return {
-        name: chatbot.name,
-        config: chatbot.config as Record<string, unknown>,
-      };
+      return withCorrelationError('widget.getConfig', async (correlationId) => {
+        const chatbot = await conversationService.getChatbotByApiKey(input.apiKey);
+        if (!chatbot) throwNotFoundWithId(correlationId, 'Invalid API key');
+        return {
+          name: chatbot.name,
+          config: chatbot.config as Record<string, unknown>,
+        };
+      });
     }),
 
   startConversation: publicProcedure
@@ -23,15 +26,17 @@ export const widgetRouter = router({
       })
     )
     .mutation(async ({ input }) => {
-      const chatbot = await conversationService.getChatbotByApiKey(input.apiKey);
-      if (!chatbot) throw new Error('Invalid API key');
-      const result = await conversationService.startConversation(
-        chatbot.id,
-        input.customerId,
-        input.channel
-      );
-      if (!result) throw new Error('No agent available');
-      return result;
+      return withCorrelationError('widget.startConversation', async (correlationId) => {
+        const chatbot = await conversationService.getChatbotByApiKey(input.apiKey);
+        if (!chatbot) throwNotFoundWithId(correlationId, 'Invalid API key');
+        const result = await conversationService.startConversation(
+          chatbot.id,
+          input.customerId,
+          input.channel
+        );
+        if (!result) throwNotFoundWithId(correlationId, 'No agent available');
+        return result;
+      });
     }),
 
   sendMessage: publicProcedure
@@ -42,20 +47,24 @@ export const widgetRouter = router({
       })
     )
     .mutation(async ({ input }) => {
-      const result = await conversationService.sendMessage(
-        input.conversationId,
-        input.content,
-        'customer'
-      );
-      if (!result) throw new Error('Conversation not found or ended');
-      return result;
+      return withCorrelationError('widget.sendMessage', async (correlationId) => {
+        const result = await conversationService.sendMessage(
+          input.conversationId,
+          input.content,
+          'customer'
+        );
+        if (!result) throwNotFoundWithId(correlationId, 'Conversation not found or ended');
+        return result;
+      });
     }),
 
   endConversation: publicProcedure
     .input(z.object({ conversationId: z.string().uuid() }))
     .mutation(async ({ input }) => {
-      const result = await conversationService.endConversation(input.conversationId);
-      if (!result) throw new Error('Conversation not found or already ended');
-      return result;
+      return withCorrelationError('widget.endConversation', async (correlationId) => {
+        const result = await conversationService.endConversation(input.conversationId);
+        if (!result) throwNotFoundWithId(correlationId, 'Conversation not found or already ended');
+        return result;
+      });
     }),
 });
