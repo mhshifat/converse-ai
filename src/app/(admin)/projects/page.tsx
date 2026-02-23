@@ -1,20 +1,14 @@
 import { ProjectsList } from '@/components/modules/projects/projects-list';
-import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { Plus } from 'lucide-react';
+import { DashboardPageHeader } from '@/components/modules/dashboard/dashboard-page-header';
 
 export default function ProjectsPage() {
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Projects</h1>
-        <Link href="/dashboard/projects/new">
-          <Button>
-            <Plus className="h-4 w-4 mr-2" />
-            New project
-          </Button>
-        </Link>
-      </div>
+    <div className="p-5 sm:p-6 md:p-8 lg:p-10">
+      <DashboardPageHeader
+        title="Projects"
+        description="Create and manage projects, customize chatbot design, and get embed code."
+        action={{ label: 'New project', href: '/dashboard/projects/new' }}
+      />
       <ProjectsList />
     </div>
   );

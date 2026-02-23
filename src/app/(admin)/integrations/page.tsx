@@ -1,20 +1,14 @@
 import { IntegrationsList } from '@/components/modules/integrations/integrations-list';
-import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { Plus } from 'lucide-react';
+import { DashboardPageHeader } from '@/components/modules/dashboard/dashboard-page-header';
 
 export default function IntegrationsPage() {
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Integrations</h1>
-        <Link href="/dashboard/integrations/new">
-          <Button>
-            <Plus className="h-4 w-4 mr-2" />
-            Add integration
-          </Button>
-        </Link>
-      </div>
+    <div className="p-5 sm:p-6 md:p-8 lg:p-10">
+      <DashboardPageHeader
+        title="Integrations"
+        description="Email, Discord, and SMS for delivering compiled conversation data."
+        action={{ label: 'Add integration', href: '/dashboard/integrations/new' }}
+      />
       <IntegrationsList />
     </div>
   );

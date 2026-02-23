@@ -74,7 +74,7 @@ export function ProjectsList() {
     <div className="rounded-lg border bg-card">
       <div className="p-4 border-b flex flex-wrap items-center gap-2">
         <Input
-          placeholder="Search projects…”
+          placeholder="Search projects..."
           value={search}
           onChange={(e) => {
             setSearch(e.target.value);

@@ -1,23 +1,32 @@
 import { DashboardOverviewCards } from '@/components/modules/dashboard/dashboard-overview-cards';
-import { MicroPulse } from '@/components/shared/micro-pulse';
 
 export default function DashboardPage() {
   return (
-    <div className="p-6 md:p-8">
-      <section className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-          Overview
-          <MicroPulse className="text-primary" aria-hidden />
+    <div className="p-5 sm:p-6 md:p-8 lg:p-10">
+      {/* Hero */}
+      <section className="mb-10">
+        <p
+          className="text-sm font-medium text-muted-foreground"
+          style={{ animation: 'dash-fade-in 0.4s ease-out both' }}
+        >
+          Welcome back
+        </p>
+        <h1
+          className="mt-1.5 text-3xl font-bold tracking-tight text-foreground sm:text-4xl"
+          style={{ animation: 'dash-fade-in 0.4s ease-out 0.04s both' }}
+        >
+          Dashboard
         </h1>
-        <p className="text-muted-foreground mt-1">
-          Manage projects, agents, and integrations. Get started by creating a project and embedding your chatbot.
+        <p
+          className="mt-2 max-w-lg text-[15px] leading-relaxed text-muted-foreground"
+          style={{ animation: 'dash-fade-in 0.4s ease-out 0.08s both' }}
+        >
+          Manage your projects, agents, and integrations. Create a project and embed your chatbot to get started.
         </p>
       </section>
 
-      <section aria-labelledby="quick-links-heading">
-        <h2 id="quick-links-heading" className="sr-only">
-          Quick links
-        </h2>
+      {/* Bento cards */}
+      <section aria-label="Quick links">
         <DashboardOverviewCards />
       </section>
     </div>

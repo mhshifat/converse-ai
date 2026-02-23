@@ -147,6 +147,25 @@
   50% { transform: scaleY(1); }
 }
 
+/* ─── Dashboard layout ─── */
+@keyframes dash-fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes dash-mesh {
+  0%, 100% { transform: translate(0,0) scale(1); }
+  33%      { transform: translate(2%,-1%) scale(1.02); }
+  66%      { transform: translate(-1%,2%) scale(0.98); }
+}
+@keyframes dash-orb-drift {
+  0%, 100% { transform: translate(0,0); }
+  50%      { transform: translate(-12px, -18px); }
+}
+
+.dash-content-bg {
+  background: linear-gradient(155deg, oklch(0.99 0 0) 0%, oklch(0.97 0.006 265) 55%, oklch(0.98 0.004 320) 100%);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
