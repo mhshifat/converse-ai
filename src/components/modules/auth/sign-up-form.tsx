@@ -66,7 +66,11 @@ export function SignUpForm() {
           form.setError('email', { message: result.error });
         }
       } else {
-        router.push('/login');
+        if (result.requiresVerification) {
+          router.push('/login?verification=sent');
+        } else {
+          router.push('/login');
+        }
       }
     } catch (err: unknown) {
       setServerError('An unexpected error occurred. Please try again.');

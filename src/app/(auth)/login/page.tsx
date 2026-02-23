@@ -4,7 +4,7 @@ import React from "react";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { trpc } from "../../../utils/trpc";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -22,19 +22,32 @@ export default function LoginPage() {
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
   });
-  // Correct usage: trpc.auth.login.useMutation() since 'auth' is a router in appRouter
   const login = trpc.auth.login.useMutation();
+  const resendVerification = trpc.auth.resendVerification.useMutation();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const verificationSent = searchParams.get("verification") === "sent";
+  const verifiedSuccess = searchParams.get("verified") === "success";
+  const verifyError = searchParams.get("error");
   const [serverError, setServerError] = React.useState<string | null>(null);
   const [correlationId, setCorrelationId] = React.useState<string | null>(null);
+  const [emailNotVerified, setEmailNotVerified] = React.useState(false);
+  const [resendMessage, setResendMessage] = React.useState<string | null>(null);
 
   const onSubmit = async (data: FormData) => {
     setServerError(null);
     setCorrelationId(null);
+    setEmailNotVerified(false);
+    setResendMessage(null);
     try {
       const result = await login.mutateAsync(data);
       if (!result.success) {
-        setServerError(result.error || "Login failed");
+        if (result.emailNotVerified) {
+          setEmailNotVerified(true);
+          setServerError("Your account is not activated. Please verify your email first.");
+        } else {
+          setServerError(result.error || "Login failed");
+        }
         if (result.correlationId) setCorrelationId(result.correlationId);
         if (result.error?.toLowerCase().includes("permission")) {
           form.setError("email", { message: result.error });
@@ -47,6 +60,26 @@ export default function LoginPage() {
     }
   };
 
+  const onResendVerification = async () => {
+    const email = form.getValues("email");
+    if (!email) return;
+    setResendMessage(null);
+    try {
+      const result = await resendVerification.mutateAsync({ email });
+      if (result.success) {
+        if (result.alreadyVerified) {
+          setResendMessage("This account is already verified. You can log in.");
+        } else {
+          setResendMessage("Verification email sent. Check your inbox.");
+        }
+      } else {
+        setResendMessage(result.error ?? "Failed to send verification email.");
+      }
+    } catch {
+      setResendMessage("Failed to send verification email.");
+    }
+  };
+
   return (
     <main className="min-h-screen flex items-center justify-center bg-linear-to-br from-blue-50 to-blue-100">
       <div className="w-full max-w-md">
@@ -55,6 +88,34 @@ export default function LoginPage() {
             <h1 className="text-2xl font-bold mb-2 text-center">Sign in to your account</h1>
             {login.isLoading && (
               <Skeleton className="h-10 w-full mb-2" />
+            )}
+            {verificationSent && (
+              <Alert>
+                <AlertTitle>Check your email</AlertTitle>
+                <AlertDescription>
+                  We sent a verification link to your email. Click the link to activate your account, then sign in below.
+                </AlertDescription>
+              </Alert>
+            )}
+            {verifiedSuccess && (
+              <Alert>
+                <AlertTitle>Email verified</AlertTitle>
+                <AlertDescription>
+                  Your account is now activated. You can sign in below.
+                </AlertDescription>
+              </Alert>
+            )}
+            {verifyError && (
+              <Alert variant="destructive">
+                <AlertTitle>Verification issue</AlertTitle>
+                <AlertDescription>
+                  {verifyError === "missing_token"
+                    ? "Invalid verification link."
+                    : verifyError === "invalid" || verifyError === "verification_failed"
+                      ? "Verification link expired or invalid. Request a new one from the form below."
+                      : decodeURIComponent(verifyError)}
+                </AlertDescription>
+              </Alert>
             )}
             {serverError && (
               <Alert variant="destructive">
@@ -67,6 +128,28 @@ export default function LoginPage() {
                     </span>
                   )}
                 </AlertDescription>
+              </Alert>
+            )}
+            {emailNotVerified && (
+              <Alert>
+                <AlertTitle>Account not activated</AlertTitle>
+                <AlertDescription className="flex flex-col gap-2">
+                  <span>We sent a verification link to your email when you signed up. Click the link to activate your account, then try logging in again.</span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={resendVerification.isPending}
+                    onClick={onResendVerification}
+                  >
+                    {resendVerification.isPending ? "Sending…" : "Resend verification email"}
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
+            {resendMessage && (
+              <Alert variant={resendMessage.startsWith("Verification") ? "default" : "destructive"}>
+                <AlertDescription>{resendMessage}</AlertDescription>
               </Alert>
             )}
             <FormField

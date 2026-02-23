@@ -6,6 +6,11 @@ export interface SessionUser {
   name?: string;
   role: string;
   tenantId: string;
+  permissions?: string[];
+}
+
+export interface SessionData {
+  user?: SessionUser;
 }
 
 const secret = process.env.SESSION_SECRET;

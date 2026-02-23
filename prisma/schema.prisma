@@ -22,15 +22,30 @@ model tenant {
 }
 
 model user {
-  id          String   @id @default(uuid())
-  tenant_id   String
-  email       String   @unique
-  name        String
-  role        String   // 'admin' | 'agent' | 'merchant'
-  password_hash String
-  created_at  DateTime @default(now())
-  updated_at  DateTime @updatedAt
-  tenant      tenant   @relation(fields: [tenant_id], references: [id])
+  id               String    @id @default(uuid())
+  tenant_id        String
+  email            String    @unique
+  name             String
+  role             String    // 'admin' | 'agent' | 'merchant'
+  password_hash    String
+  email_verified   Boolean   @default(false)
+  email_verified_at DateTime?
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
+  tenant           tenant    @relation(fields: [tenant_id], references: [id])
+  verification_tokens verification_token[]
+}
+
+model verification_token {
+  id         String   @id @default(uuid())
+  user_id    String
+  token      String
+  type       String   // 'email_verification'
+  expires_at DateTime
+  created_at DateTime @default(now())
+  user       user     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  @@unique([user_id, type])
+  @@index([token])
 }
 
 model project {

@@ -1,4 +1,4 @@
-// error-utils: Helper to handle and format errors for UI and logging
+// error-utils: Helper to handle and format errors for UI and logging (per note.md)
 import { Logger } from './logger';
 import { CustomError } from './custom-error';
 
@@ -14,21 +14,22 @@ export function handleError({
   if (error instanceof CustomError) {
     Logger.log({
       level: 'error',
-      message: context || error.message,
+      message: context ?? error.message,
       correlationId: error.correlationId,
       error,
       meta: error.meta,
     });
     return { userMessage: error.userMessage, correlationId: error.correlationId };
   }
+  const contextMessage = context ?? (error instanceof Error ? error.message : 'Unexpected error');
   Logger.log({
     level: 'error',
-    message: context || (error as Error).message,
+    message: contextMessage,
     correlationId,
-    error: error as Error,
+    error,
   });
   return {
-    userMessage: 'An unexpected error occurred. Please contact support with the correlation ID.',
+    userMessage: 'Something went wrong. Please try again or contact support with the correlation ID.',
     correlationId,
   };
 }

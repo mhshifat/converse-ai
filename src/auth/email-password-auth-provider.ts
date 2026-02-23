@@ -8,6 +8,9 @@ export class EmailPasswordAuthProvider implements AuthProvider {
     if (!user) return { success: false, error: 'Invalid credentials' };
     const valid = await bcrypt.compare(credentials.password, user.password_hash);
     if (!valid) return { success: false, error: 'Invalid credentials' };
+    if (!user.email_verified) {
+      return { success: false, error: 'EMAIL_NOT_VERIFIED' };
+    }
     // Example: assign permissions based on role
     let permissions: string[] = [];
     if (user.role === 'admin') {
