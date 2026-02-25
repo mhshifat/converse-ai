@@ -40,6 +40,7 @@ export const projectsRouter = router({
       z.object({
         name: z.string().min(1, 'Name is required'),
         description: z.string().optional(),
+        icon: z.string().optional().nullable(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -48,6 +49,7 @@ export const projectsRouter = router({
           tenantId: ctx.user.tenantId,
           name: input.name,
           description: input.description,
+          icon: input.icon ?? null,
         });
       });
     }),
@@ -58,6 +60,7 @@ export const projectsRouter = router({
         id: z.string().uuid(),
         name: z.string().min(1).optional(),
         description: z.string().optional(),
+        icon: z.string().optional().nullable(),
         dataSchema: z.unknown().optional(),
         deliveryIntegrationIds: z.array(z.string().uuid()).optional(),
       })

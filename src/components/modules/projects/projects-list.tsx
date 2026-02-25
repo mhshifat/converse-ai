@@ -95,7 +95,7 @@ export function ProjectsList() {
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
-            <Link href="/dashboard/projects/new">
+            <Link href="/projects/new">
               <Button>Create project</Button>
             </Link>
           </EmptyContent>
@@ -120,7 +120,7 @@ export function ProjectsList() {
                   </TableCell>
                   <TableCell>{p.chatbotCount}</TableCell>
                   <TableCell>
-                    <Link href={`/dashboard/projects/${p.id}`}>
+                    <Link href={`/projects/${p.id}`}>
                       <Button variant="outline" size="sm">
                         Open
                       </Button>

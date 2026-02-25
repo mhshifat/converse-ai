@@ -40,6 +40,7 @@ export async function listProjects(input: ListProjectsInput) {
       tenantId: p.tenant_id,
       name: p.name,
       description: p.description,
+      icon: p.icon,
       dataSchema: p.data_schema,
       deliveryIntegrationIds: p.delivery_integration_ids,
       createdAt: p.created_at,
@@ -66,6 +67,7 @@ export async function getProjectById(projectId: string, tenantId: string) {
     tenantId: project.tenant_id,
     name: project.name,
     description: project.description,
+    icon: project.icon,
     dataSchema: project.data_schema,
     deliveryIntegrationIds: project.delivery_integration_ids,
     createdAt: project.created_at,
@@ -86,12 +88,14 @@ export async function createProject(data: {
   tenantId: string;
   name: string;
   description?: string;
+  icon?: string | null;
 }) {
   const project = await prisma.project.create({
     data: {
       tenant_id: data.tenantId,
       name: data.name,
       description: data.description ?? null,
+      icon: data.icon ?? null,
     },
   });
   return {
@@ -99,6 +103,7 @@ export async function createProject(data: {
     tenantId: project.tenant_id,
     name: project.name,
     description: project.description,
+    icon: project.icon,
     dataSchema: project.data_schema,
     deliveryIntegrationIds: project.delivery_integration_ids,
     createdAt: project.created_at,
@@ -112,6 +117,7 @@ export async function updateProject(
   data: {
     name?: string;
     description?: string;
+    icon?: string | null;
     dataSchema?: unknown;
     deliveryIntegrationIds?: string[];
   }
@@ -126,6 +132,7 @@ export async function updateProject(
     data: {
       ...(data.name !== undefined && { name: data.name }),
       ...(data.description !== undefined && { description: data.description }),
+      ...(data.icon !== undefined && { icon: data.icon }),
       ...(data.dataSchema !== undefined && { data_schema: data.dataSchema as object }),
       ...(data.deliveryIntegrationIds !== undefined && {
         delivery_integration_ids: data.deliveryIntegrationIds,
@@ -137,6 +144,7 @@ export async function updateProject(
     tenantId: updated.tenant_id,
     name: updated.name,
     description: updated.description,
+    icon: updated.icon,
     dataSchema: updated.data_schema,
     deliveryIntegrationIds: updated.delivery_integration_ids,
     createdAt: updated.created_at,

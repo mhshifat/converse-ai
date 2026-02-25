@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { getIronSession } from 'iron-session';
 import { cookies } from 'next/headers';
-import { sessionOptions } from '@/lib/session';
+import { sessionOptions, type SessionData } from '@/lib/session';
 import { prisma } from '@/lib/prisma';
 import { ProjectDetail } from '@/components/modules/projects/project-detail';
 
@@ -11,7 +11,7 @@ export default async function ProjectDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const session = await getIronSession(await cookies(), sessionOptions);
+  const session = await getIronSession<SessionData>(await cookies(), sessionOptions);
   if (!session.user) notFound();
 
   const project = await prisma.project.findFirst({
@@ -28,6 +28,7 @@ export default async function ProjectDetailPage({
           tenantId: project.tenant_id,
           name: project.name,
           description: project.description ?? undefined,
+          icon: project.icon ?? undefined,
           dataSchema: project.data_schema,
           deliveryIntegrationIds: Array.isArray(project.delivery_integration_ids)
             ? (project.delivery_integration_ids as string[])

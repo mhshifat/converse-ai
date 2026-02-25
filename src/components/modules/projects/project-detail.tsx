@@ -24,6 +24,7 @@ interface ProjectDetailProps {
     tenantId: string;
     name: string;
     description?: string;
+    icon?: string | null;
     dataSchema?: unknown;
     deliveryIntegrationIds?: string[];
     createdAt: Date;
@@ -38,7 +39,7 @@ export function ProjectDetail({ project }: ProjectDetailProps) {
 
   return (
     <div>
-      <Link href="/dashboard/projects">
+      <Link href="/projects">
         <Button variant="ghost" size="sm" className="mb-4 -ml-2">
           <ArrowLeft className="h-4 w-4 mr-1" />
           Back to projects

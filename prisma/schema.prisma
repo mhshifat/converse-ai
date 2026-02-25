@@ -53,6 +53,7 @@ model project {
   tenant_id                String
   name                     String
   description              String?
+  icon                     String?  // Lucide icon name e.g. FolderKanban
   data_schema              Json?    // JSON schema for extracting structured data from conversations
   delivery_integration_ids  Json?    // array of integration ids for email/discord/sms delivery
   created_at               DateTime @default(now())

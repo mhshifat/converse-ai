@@ -166,6 +166,16 @@
   background: linear-gradient(155deg, oklch(0.99 0 0) 0%, oklch(0.97 0.006 265) 55%, oklch(0.98 0.004 320) 100%);
 }
 
+/* Primary + secondary sidebar: secondary starts after primary (4rem) on desktop */
+@media (min-width: 768px) {
+  .dashboard-with-primary-sidebar [data-slot="sidebar-container"] {
+    left: 4rem;
+  }
+  .dashboard-with-primary-sidebar [data-collapsible=offcanvas] [data-slot="sidebar-container"] {
+    left: calc(4rem - var(--sidebar-width));
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

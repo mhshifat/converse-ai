@@ -7,7 +7,7 @@ export default function ProjectsPage() {
       <DashboardPageHeader
         title="Projects"
         description="Create and manage projects, customize chatbot design, and get embed code."
-        action={{ label: 'New project', href: '/dashboard/projects/new' }}
+        action={{ label: 'New project', href: '/projects/new' }}
       />
       <ProjectsList />
     </div>
