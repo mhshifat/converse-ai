@@ -166,6 +166,20 @@
   background: linear-gradient(155deg, oklch(0.99 0 0) 0%, oklch(0.97 0.006 265) 55%, oklch(0.98 0.004 320) 100%);
 }
 
+/* ─── Project overview ─── */
+@keyframes overview-fade-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes overview-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-4px); }
+}
+@keyframes overview-pulse-soft {
+  0%, 100% { opacity: 0.6; }
+  50%      { opacity: 1; }
+}
+
 /* Primary + secondary sidebar: secondary starts after primary (4rem) on desktop */
 @media (min-width: 768px) {
   .dashboard-with-primary-sidebar [data-slot="sidebar-container"] {

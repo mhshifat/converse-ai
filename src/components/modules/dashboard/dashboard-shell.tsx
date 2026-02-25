@@ -6,7 +6,6 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -24,8 +23,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ConverseLogo } from '@/components/shared/converse-logo';
 import { PrimarySidebar } from '@/components/modules/dashboard/primary-sidebar';
+import { ProjectIcon } from '@/lib/project-icons';
 import { trpc } from '@/utils/trpc';
 import {
   Bot,
@@ -76,6 +75,11 @@ export function DashboardShell({ userEmail, children }: DashboardShellProps) {
     return m?.[1] ?? null;
   }, [pathname]);
 
+  const { data: currentProject } = trpc.projects.getById.useQuery(
+    { id: projectId! },
+    { enabled: !!projectId }
+  );
+
   function isActive(href: string) {
     if (href === '/dashboard') return pathname === '/dashboard';
     if (href.startsWith('/projects/') && projectId) return pathname.startsWith(href);
@@ -103,27 +107,25 @@ export function DashboardShell({ userEmail, children }: DashboardShellProps) {
             ⌘K
           </kbd>
         </div>
-        {!projectId ? (
-          <div className="ml-auto flex w-auto items-center self-center">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button type="button" className="w-full shrink-0 text-left outline-none rounded-full [&>div]:h-auto">
-                  {userBlock}
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-[200px]">
-                <DropdownMenuItem
-                  variant="destructive"
-                  onSelect={() => logout.mutate()}
-                  disabled={logout.isPending}
-                >
-                  <LogOut className="size-4" />
-                  {logout.isPending ? 'Logging out…' : 'Log out'}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        ) : null}
+        <div className="ml-auto flex w-auto items-center self-center">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button type="button" className="w-full shrink-0 text-left outline-none rounded-full [&>div]:h-auto">
+                {userBlock}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[200px]">
+              <DropdownMenuItem
+                variant="destructive"
+                onSelect={() => logout.mutate()}
+                disabled={logout.isPending}
+              >
+                <LogOut className="size-4" />
+                {logout.isPending ? 'Logging out…' : 'Log out'}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </header>
       <div className="relative min-h-0 flex-1 overflow-auto dash-content-bg">
         <DashboardBackground />
@@ -139,27 +141,52 @@ export function DashboardShell({ userEmail, children }: DashboardShellProps) {
         <SidebarProvider className="md:ml-16 flex-1 min-w-0">
           <Sidebar variant="sidebar" collapsible="icon">
             <SidebarHeader className="px-5 pt-6 pb-4">
-              <Link href={`/projects/${projectId}`} className="flex items-center gap-2.5 group/logo">
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-foreground text-background shadow-sm">
-                  <ConverseLogo size={20} className="[&_svg]:text-background" />
-                </span>
-                <span className="text-base font-semibold tracking-tight text-foreground">
-                  Converse
-                </span>
-              </Link>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-2.5 rounded-xl border border-border/50 bg-muted/30 px-3 py-2.5 text-left transition-colors hover:bg-muted/50 group/header outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  >
+                    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-background shadow-sm">
+                      <ProjectIcon iconKey={currentProject?.icon ?? undefined} size={20} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold tracking-tight text-foreground">
+                        {currentProject?.name ?? 'Project'}
+                      </span>
+                      <span className="block text-[11px] text-muted-foreground">Converse</span>
+                    </div>
+                    <ChevronDown className="size-4 shrink-0 text-muted-foreground opacity-60 group-hover/header:opacity-100" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="min-w-[200px]" sideOffset={4}>
+                  <DropdownMenuItem asChild>
+                    <Link href={`/projects/${projectId}`} className="flex cursor-pointer items-center gap-2">
+                      <Home className="size-4" />
+                      Overview
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/projects" className="flex cursor-pointer items-center gap-2">
+                      <ArrowLeft className="size-4" />
+                      All projects
+                    </Link>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </SidebarHeader>
             <SidebarContent className="px-3 pt-1">
               <SidebarGroup>
                 <SidebarGroupLabel className="mb-1.5 px-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/60">
-                  Project
+                  {currentProject ? currentProject.name : 'Project'}
                 </SidebarGroupLabel>
                 <SidebarGroupContent>
                   <SidebarMenu className="space-y-0.5">
-                    <SidebarMenuItem>
+                    <SidebarMenuItem className="border-t border-border/50 pt-2 mt-1">
                       <SidebarMenuButton asChild>
                         <Link
                           href="/projects"
-                          className="flex items-center gap-3 rounded-xl px-3 py-2 text-[13px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+                          className="flex items-center gap-3 rounded-xl border border-transparent px-3 py-2 text-[13px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground hover:border-border/50"
                         >
                           <ArrowLeft className="size-[18px] shrink-0" />
                           <span>All projects</span>
@@ -175,13 +202,19 @@ export function DashboardShell({ userEmail, children }: DashboardShellProps) {
                             <Link
                               href={item.href}
                               className={cn(
-                                'flex items-center gap-3 rounded-xl px-3 py-2 text-[13px] font-medium transition-all duration-150',
+                                'relative flex items-center gap-3 rounded-xl px-3 py-2 text-[13px] font-medium transition-all duration-200',
                                 active
                                   ? 'bg-foreground text-background shadow-sm'
                                   : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                               )}
                             >
-                              <Icon className={cn('size-[18px] shrink-0', active ? 'text-foreground' : 'text-muted-foreground/80')} />
+                              {active && (
+                                <span
+                                  className="absolute left-2 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-background"
+                                  aria-hidden
+                                />
+                              )}
+                              <Icon className={cn('size-[18px] shrink-0', active ? 'text-background' : 'text-muted-foreground/80')} />
                               <span>{item.label}</span>
                             </Link>
                           </SidebarMenuButton>
@@ -192,27 +225,6 @@ export function DashboardShell({ userEmail, children }: DashboardShellProps) {
                 </SidebarGroupContent>
               </SidebarGroup>
             </SidebarContent>
-            <SidebarFooter className="flex flex-col items-stretch p-4">
-              <div className="py-2">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button type="button" className="w-full max-w-full text-left outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-full [&>div]:h-auto">
-                      {userBlock}
-                    </button>
-                  </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" side="top" className="min-w-[200px]">
-                  <DropdownMenuItem
-                    variant="destructive"
-                    onSelect={() => logout.mutate()}
-                    disabled={logout.isPending}
-                  >
-                    <LogOut className="size-4" />
-                    {logout.isPending ? 'Logging out…' : 'Log out'}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-              </div>
-            </SidebarFooter>
           </Sidebar>
           <SidebarInset>{mainContent}</SidebarInset>
         </SidebarProvider>
