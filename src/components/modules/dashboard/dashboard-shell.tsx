@@ -28,6 +28,7 @@ import { ProjectIcon } from '@/lib/project-icons';
 import { trpc } from '@/utils/trpc';
 import {
   Bot,
+  BookOpen,
   Plug,
   LogOut,
   Search,
@@ -94,6 +95,7 @@ export function DashboardShell({ userEmail, children }: DashboardShellProps) {
     ? [
         { href: `/projects/${projectId}`, label: 'Overview', icon: Home },
         { href: `/projects/${projectId}/agents`, label: 'Agents', icon: Bot },
+        { href: `/projects/${projectId}/knowledge`, label: 'Knowledge', icon: BookOpen },
         { href: `/projects/${projectId}/integrations`, label: 'Integrations', icon: Plug },
       ]
     : null;

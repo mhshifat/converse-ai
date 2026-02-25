@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { AgentProviderFactory } from '@/adapters/agent-provider-factory';
 import { getDefaultAgentForProject } from '../repositories/project-agent-repository';
+import { buildContextForProject } from './agent-context-service';
 import { sendCompiledDataEmail } from './email-delivery';
 
 export async function getChatbotByApiKey(apiKey: string) {
@@ -62,7 +63,7 @@ export async function sendMessage(
 ) {
   const conversation = await prisma.conversation.findUnique({
     where: { id: conversationId },
-    include: { agent: true },
+    include: { agent: true, chatbot: { select: { project_id: true } } },
   });
   if (!conversation || conversation.status !== 'active') return null;
 
@@ -96,13 +97,18 @@ export async function sendMessage(
       role: m.sender_type === 'customer' ? 'user' : 'assistant',
       content: m.content,
     }));
+    const projectId = conversation.chatbot.project_id;
+    const knowledgeContext = await buildContextForProject(projectId);
+    const systemPromptWithKnowledge =
+      conversation.agent.system_prompt +
+      (knowledgeContext ? knowledgeContext : '');
     const { response } = await provider.sendMessage({
       prompt: content,
       conversationId,
       agentId: conversation.agent_id,
       context: {
         history,
-        systemPrompt: conversation.agent.system_prompt,
+        systemPrompt: systemPromptWithKnowledge,
         model: agentSettings.model,
       },
     });
