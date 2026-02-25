@@ -28,62 +28,167 @@ const EMBED_SCRIPT = `
   }
 
   var conversationId = null;
-  var config = { primaryColor: '#2563eb', welcomeMessage: 'How can I help?', position: 'bottom-right' };
+  var mode = 'chat';
+  var config = {
+    primaryColor: '#2563eb',
+    welcomeMessage: 'How can I help?',
+    position: 'bottom-right',
+    name: 'Chat',
+    bubble: { size: 56, borderRadius: 50, backgroundColor: '#2563eb', iconColor: '#ffffff', shadow: '0 4px 12px rgba(0,0,0,0.15)' },
+    popup: { width: 380, height: 420, borderRadius: 16, shadow: '0 8px 32px rgba(0,0,0,0.12)', backgroundColor: '#ffffff' },
+    header: { backgroundColor: '#ffffff', textColor: '#111111', fontSize: 16, title: 'Chat', showCloseButton: true, logoSize: 28 },
+    footer: { borderColor: '#eeeeee', inputPlaceholder: 'Type a message...', inputBackground: '#ffffff', inputTextColor: '#111111', inputBorderRadius: 8, sendButtonBackground: '#2563eb', sendButtonTextColor: '#ffffff', sendButtonBorderRadius: 8 },
+    messages: { welcomeTextColor: '#666666', userBubbleBackground: '#2563eb', userBubbleTextColor: '#ffffff', agentBubbleBackground: '#f0f0f0', agentBubbleTextColor: '#111111', bubbleBorderRadius: 12, fontSize: 14 }
+  };
   var messages = [];
   var root = null;
   var panel = null;
   var listEl = null;
+
+  function merge(obj, def) {
+    if (!obj) return def;
+    var out = {};
+    for (var k in def) out[k] = obj[k] !== undefined ? obj[k] : def[k];
+    return out;
+  }
+
+  function injectStyles() {
+    if (document.getElementById('converseai-widget-styles')) return;
+    var style = document.createElement('style');
+    style.id = 'converseai-widget-styles';
+    style.textContent = '#converseai-root .cai-msg-user{animation: cai-in-u .3s ease-out both}#converseai-root .cai-msg-agent{animation: cai-in-a .3s ease-out both}@keyframes cai-in-u{from{opacity:0;transform:translateX(8px) scale(.96)}to{opacity:1;transform:translateX(0) scale(1)}}@keyframes cai-in-a{from{opacity:0;transform:translateX(-8px) scale(.96)}to{opacity:1;transform:translateX(0) scale(1)}}@keyframes cai-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.7;transform:scale(1.2)}}';
+    document.head.appendChild(style);
+  }
 
   function render() {
     if (root) return;
     root = document.createElement('div');
     root.id = 'converseai-root';
     var pos = config.position || 'bottom-right';
+    var b = config.bubble || {};
     var style = 'position:fixed;z-index:999999;';
     if (pos.indexOf('bottom') !== -1) style += 'bottom:24px;'; else style += 'top:24px;';
     if (pos.indexOf('right') !== -1) style += 'right:24px;'; else style += 'left:24px;';
     root.style.cssText = style;
     var btn = document.createElement('button');
     btn.setAttribute('aria-label', 'Open chat');
-    btn.style.cssText = 'width:56px;height:56px;border-radius:50%;background:' + config.primaryColor + ';color:#fff;border:none;cursor:pointer;font-size:24px;box-shadow:0 4px 12px rgba(0,0,0,0.15);';
+    btn.style.cssText = 'width:' + (b.size || 56) + 'px;height:' + (b.size || 56) + 'px;border-radius:' + (b.borderRadius || 50) + '%;background:' + (b.backgroundColor || config.primaryColor) + ';color:' + (b.iconColor || '#fff') + ';border:none;cursor:pointer;font-size:24px;box-shadow:' + (b.shadow || '0 4px 12px rgba(0,0,0,0.15)') + ';display:flex;align-items:center;justify-content:center;transition:transform .2s;';
+    btn.onmouseenter = function() { btn.style.transform = 'scale(1.1)'; };
+    btn.onmouseleave = function() { btn.style.transform = 'scale(1)'; };
     btn.textContent = '💬';
     btn.onclick = openPanel;
     root.appendChild(btn);
     document.body.appendChild(root);
+    injectStyles();
   }
 
   function openPanel() {
-    if (panel) { panel.style.display = 'block'; return; }
+    if (panel) { panel.style.display = 'flex'; return; }
+    var p = config.popup || {};
+    var h = config.header || {};
+    var f = config.footer || {};
     panel = document.createElement('div');
-    panel.style.cssText = 'position:absolute;bottom:70px;right:0;width:380px;max-width:calc(100vw - 48px);height:420px;background:#fff;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,0.12);display:flex;flex-direction:column;overflow:hidden;';
+    panel.style.cssText = 'position:absolute;bottom:' + (config.bubble && config.bubble.size ? config.bubble.size + 12 : 68) + 'px;right:0;width:' + (p.width || 380) + 'px;max-width:calc(100vw - 48px);height:' + (p.height || 420) + 'px;background:' + (p.backgroundColor || '#fff') + ';border-radius:' + (p.borderRadius || 16) + 'px;box-shadow:' + (p.shadow || '0 8px 32px rgba(0,0,0,0.12)') + ';display:flex;flex-direction:column;overflow:hidden;';
+    if (config.position && config.position.indexOf('bottom') === -1) {
+      panel.style.bottom = 'auto';
+      panel.style.top = (config.bubble && config.bubble.size ? config.bubble.size + 12 : 68) + 'px';
+    }
+    if (config.position === 'bottom-left' || config.position === 'top-left') {
+      panel.style.right = 'auto';
+      panel.style.left = '0';
+    }
     var header = document.createElement('div');
-    header.style.cssText = 'padding:12px 16px;border-bottom:1px solid #eee;font-weight:600;color:#111;display:flex;align-items:center;justify-content:space-between;';
+    header.style.cssText = 'padding:12px 16px;border-bottom:1px solid ' + (f.borderColor || '#eee') + ';color:' + (h.textColor || '#111') + ';background:' + (h.backgroundColor || '#fff') + ';display:flex;align-items:center;justify-content:space-between;gap:12px;';
+    var headerLeft = document.createElement('div');
+    headerLeft.style.cssText = 'display:flex;align-items:center;gap:8px;flex:1;min-width:0;';
+    var logoSize = h.logoSize || 28;
+    if (h.logoUrl) {
+      var logoImg = document.createElement('img');
+      logoImg.src = h.logoUrl;
+      logoImg.alt = '';
+      logoImg.style.cssText = 'width:' + logoSize + 'px;height:' + logoSize + 'px;object-fit:contain;flex-shrink:0;border-radius:4px;';
+      headerLeft.appendChild(logoImg);
+    }
+    var titleBlock = document.createElement('div');
+    titleBlock.style.cssText = 'min-width:0;';
     var titleSpan = document.createElement('span');
-    titleSpan.textContent = config.name || 'Chat';
-    var closeBtn = document.createElement('button');
-    closeBtn.textContent = '×';
-    closeBtn.setAttribute('aria-label', 'Close');
-    closeBtn.style.cssText = 'background:none;border:none;font-size:24px;cursor:pointer;color:#666;line-height:1;';
-    closeBtn.onclick = function() {
-      panel.style.display = 'none';
-      if (conversationId) {
-        trpcMutate('widget.endConversation', { conversationId: conversationId }).catch(function(){});
-      }
-    };
-    header.appendChild(titleSpan);
-    header.appendChild(closeBtn);
+    titleSpan.textContent = h.title || config.name || 'Chat';
+    titleSpan.style.cssText = 'display:block;font-weight:600;font-size:' + (h.fontSize || 16) + 'px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    titleBlock.appendChild(titleSpan);
+    if (h.subtitle) {
+      var subSpan = document.createElement('span');
+      subSpan.textContent = h.subtitle;
+      subSpan.style.cssText = 'display:block;font-size:11px;opacity:0.75;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+      titleBlock.appendChild(subSpan);
+    }
+    headerLeft.appendChild(titleBlock);
+    header.appendChild(headerLeft);
+    if (h.statusText) {
+      var statusPill = document.createElement('div');
+      statusPill.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:rgba(0,0,0,.06);font-size:11px;font-weight:500;color:#666;flex-shrink:0;';
+      var statusDot = document.createElement('span');
+      statusDot.style.cssText = 'width:6px;height:6px;border-radius:50%;background:' + (h.statusDotColor || '#22c55e') + ';animation:cai-pulse 2s ease-in-out infinite;';
+      statusPill.appendChild(statusDot);
+      statusPill.appendChild(document.createTextNode(h.statusText));
+      header.appendChild(statusPill);
+    }
+    if (h.showCloseButton !== false) {
+      var closeBtn = document.createElement('button');
+      closeBtn.innerHTML = '&times;';
+      closeBtn.setAttribute('aria-label', 'Close');
+      closeBtn.style.cssText = 'width:32px;height:32px;display:flex;align-items:center;justify-content:center;background:none;border:none;font-size:20px;cursor:pointer;color:#666;line-height:1;border-radius:50%;transition:background .15s, color .15s;';
+      closeBtn.onmouseenter = function() { closeBtn.style.background = 'rgba(0,0,0,.06)'; closeBtn.style.color = '#111'; };
+      closeBtn.onmouseleave = function() { closeBtn.style.background = 'none'; closeBtn.style.color = '#666'; };
+      closeBtn.onclick = function() {
+        panel.style.display = 'none';
+        if (conversationId) {
+          trpcMutate('widget.endConversation', { conversationId: conversationId }).catch(function(){});
+        }
+      };
+      header.appendChild(closeBtn);
+    }
     panel.appendChild(header);
     listEl = document.createElement('div');
-    listEl.style.cssText = 'flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;';
+    listEl.style.cssText = 'flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px;background:' + (p.backgroundColor || '#fff') + ';';
     panel.appendChild(listEl);
-    var row = document.createElement('div');
-    row.style.cssText = 'display:flex;gap:8px;padding:12px;border-top:1px solid #eee;';
+    var footerWrap = document.createElement('div');
+    footerWrap.style.cssText = 'padding:12px;border-top:1px solid ' + (f.borderColor || '#eee') + ';background:' + (f.backgroundColor || '#fff') + ';';
+    var voiceEnabled = config.voiceEnabled === true;
+    if (voiceEnabled) {
+      var toggleWrap = document.createElement('div');
+      toggleWrap.style.cssText = 'display:flex;border-radius:8px;padding:2px;background:rgba(0,0,0,.06);margin-bottom:8px;';
+      var chatTab = document.createElement('button');
+      chatTab.textContent = '💬 Chat';
+      chatTab.style.cssText = 'flex:1;padding:6px 10px;border:none;border-radius:6px;font-size:12px;cursor:pointer;background:' + (mode === 'chat' ? (f.sendButtonBackground || config.primaryColor) : 'transparent') + ';color:' + (mode === 'chat' ? (f.sendButtonTextColor || '#fff') : '#666') + ';font-weight:500;transition:background .2s, color .2s;';
+      var voiceTab = document.createElement('button');
+      voiceTab.textContent = '🎤 Voice';
+      voiceTab.style.cssText = 'flex:1;padding:6px 10px;border:none;border-radius:6px;font-size:12px;cursor:pointer;background:' + (mode === 'voice' ? (f.sendButtonBackground || config.primaryColor) : 'transparent') + ';color:' + (mode === 'voice' ? (f.sendButtonTextColor || '#fff') : '#666') + ';font-weight:500;transition:background .2s, color .2s;';
+      chatTab.onclick = function() { mode = 'chat'; chatTab.style.background = f.sendButtonBackground || config.primaryColor; chatTab.style.color = f.sendButtonTextColor || '#fff'; voiceTab.style.background = 'transparent'; voiceTab.style.color = '#666'; inputRow.style.display = 'flex'; voiceRow.style.display = 'none'; };
+      voiceTab.onclick = function() { mode = 'voice'; voiceTab.style.background = f.sendButtonBackground || config.primaryColor; voiceTab.style.color = f.sendButtonTextColor || '#fff'; chatTab.style.background = 'transparent'; chatTab.style.color = '#666'; inputRow.style.display = 'none'; voiceRow.style.display = 'flex'; };
+      toggleWrap.appendChild(chatTab);
+      toggleWrap.appendChild(voiceTab);
+      footerWrap.appendChild(toggleWrap);
+    }
+    var inputRow = document.createElement('div');
+    inputRow.style.cssText = 'display:flex;gap:8px;align-items:center;';
+    var inputWrap = document.createElement('div');
+    inputWrap.style.cssText = 'flex:1;display:flex;align-items:center;gap:8px;padding:8px 14px;border:1px solid #e5e5e5;border-radius:' + (Math.min((f.inputBorderRadius || 8) * 2, 24)) + 'px;background:' + (f.inputBackground || '#fff') + ';transition:box-shadow .2s;';
+    inputWrap.onfocusin = function() { inputWrap.style.boxShadow = '0 0 0 2px ' + (f.sendButtonBackground || config.primaryColor) + '40'; };
+    inputWrap.onfocusout = function() { inputWrap.style.boxShadow = 'none'; };
+    var inputIcon = document.createElement('span');
+    inputIcon.textContent = '✎';
+    inputIcon.style.cssText = 'font-size:14px;color:#999;';
     var input = document.createElement('input');
-    input.placeholder = 'Type a message...';
-    input.style.cssText = 'flex:1;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;';
+    input.placeholder = f.inputPlaceholder || 'Type a message...';
+    input.style.cssText = 'flex:1;min-width:0;padding:0;border:none;outline:none;font-size:14px;background:transparent;color:' + (f.inputTextColor || '#111') + ';';
     var sendBtn = document.createElement('button');
-    sendBtn.textContent = 'Send';
-    sendBtn.style.cssText = 'padding:10px 16px;background:' + config.primaryColor + ';color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:500;';
+    sendBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="display:block"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>';
+    sendBtn.setAttribute('aria-label', 'Send');
+    sendBtn.style.cssText = 'width:40px;height:40px;display:flex;align-items:center;justify-content:center;padding:0;background:' + (f.sendButtonBackground || config.primaryColor) + ';color:' + (f.sendButtonTextColor || '#fff') + ';border:none;border-radius:50%;cursor:pointer;box-shadow:0 2px 8px ' + (f.sendButtonBackground || config.primaryColor) + '40;transition:transform .15s, opacity .15s;';
+    sendBtn.onmouseenter = function() { sendBtn.style.opacity = '0.9'; sendBtn.style.transform = 'scale(1.05)'; };
+    sendBtn.onmouseleave = function() { sendBtn.style.opacity = '1'; sendBtn.style.transform = 'scale(1)'; };
+    sendBtn.onmousedown = function() { sendBtn.style.transform = 'scale(0.95)'; };
+    sendBtn.onmouseup = function() { sendBtn.style.transform = 'scale(1.05)'; };
     function send() {
       var text = (input.value || '').trim();
       if (!text || !conversationId) return;
@@ -96,14 +201,29 @@ const EMBED_SCRIPT = `
     }
     input.onkeydown = function(e) { if (e.key === 'Enter') send(); };
     sendBtn.onclick = send;
-    row.appendChild(input);
-    row.appendChild(sendBtn);
-    panel.appendChild(row);
+    inputWrap.appendChild(inputIcon);
+    inputWrap.appendChild(input);
+    inputRow.appendChild(inputWrap);
+    inputRow.appendChild(sendBtn);
+    footerWrap.appendChild(inputRow);
+    var voiceRow = document.createElement('div');
+    voiceRow.style.cssText = 'display:none;align-items:center;justify-content:center;gap:10px;padding:12px;background:rgba(0,0,0,.04);border-radius:' + (f.inputBorderRadius || 8) + 'px;';
+    var voiceBtn = document.createElement('button');
+    voiceBtn.textContent = '🎤';
+    voiceBtn.style.cssText = 'width:48px;height:48px;display:flex;align-items:center;justify-content:center;font-size:24px;background:' + (f.sendButtonBackground || config.primaryColor) + ';color:' + (f.sendButtonTextColor || '#fff') + ';border:none;border-radius:50%;cursor:pointer;box-shadow:0 2px 12px ' + (f.sendButtonBackground || config.primaryColor) + '50;';
+    var voiceLabel = document.createElement('span');
+    voiceLabel.textContent = 'Tap to start voice';
+    voiceLabel.style.cssText = 'font-size:12px;color:#666;font-weight:500;';
+    voiceRow.appendChild(voiceBtn);
+    voiceRow.appendChild(voiceLabel);
+    footerWrap.appendChild(voiceRow);
+    panel.appendChild(footerWrap);
     root.appendChild(panel);
+    var m = config.messages || {};
     if (messages.length === 0) {
-      listEl.innerHTML = '<div style="color:#666;font-size:14px;">' + (config.welcomeMessage || 'How can I help?') + '</div>';
+      listEl.innerHTML = '<div style="display:flex;align-items:flex-start;gap:8px;color:' + (m.welcomeTextColor || '#666') + ';font-size:' + (m.fontSize || 14) + 'px;"><span style="margin-top:2px;flex-shrink:0;width:24px;height:24px;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.06);border-radius:50%;font-size:12px">✦</span><span style="line-height:1.4">' + (config.welcomeMessage || 'How can I help?') + '</span></div>';
     } else {
-      messages.forEach(function(m) { appendMsg(m.sender, m.content, true); });
+      messages.forEach(function(msg) { appendMsg(msg.sender, msg.content, true); });
     }
     if (!conversationId) {
       trpcMutate('widget.startConversation', { apiKey: apiKey, customerId: customerId, channel: 'text' }).then(function(res) {
@@ -117,23 +237,40 @@ const EMBED_SCRIPT = `
     if (!noPush) messages.push({ sender: sender, content: content });
     if (listEl && listEl.querySelector && listEl.childNodes.length === 1 && listEl.querySelector('div') && !listEl.querySelector('div').dataset.msg) listEl.innerHTML = '';
     if (!listEl) return;
-    var div = document.createElement('div');
-    div.style.cssText = 'align-self:' + (sender === 'customer' ? 'flex-end' : 'flex-start') + ';max-width:85%;padding:8px 12px;border-radius:12px;font-size:14px;background:' + (sender === 'customer' ? config.primaryColor : '#f0f0f0') + ';color:' + (sender === 'customer' ? '#fff' : '#111') + ';';
-    div.textContent = content;
-    div.dataset.msg = '1';
-    listEl.appendChild(div);
+    var m = config.messages || {};
+    var isUser = sender === 'customer';
+    var row = document.createElement('div');
+    row.className = isUser ? 'cai-msg-user' : 'cai-msg-agent';
+    row.style.cssText = 'display:flex;align-items:flex-end;gap:8px;' + (isUser ? 'flex-direction:row-reverse;align-self:flex-end;' : 'align-self:flex-start;');
+    var bubble = document.createElement('div');
+    bubble.style.cssText = 'max-width:85%;padding:10px 14px;border-radius:' + (m.bubbleBorderRadius || 12) + 'px;font-size:' + (m.fontSize || 14) + 'px;background:' + (isUser ? (m.userBubbleBackground || config.primaryColor) : (m.agentBubbleBackground || '#f0f0f0')) + ';color:' + (isUser ? (m.userBubbleTextColor || '#fff') : (m.agentBubbleTextColor || '#111')) + ';box-shadow:0 1px 3px rgba(0,0,0,.08);';
+    bubble.textContent = content;
+    var avatar = document.createElement('div');
+    avatar.style.cssText = 'width:28px;height:28px;flex-shrink:0;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;background:' + (isUser ? (m.userBubbleBackground || config.primaryColor) : (m.agentBubbleBackground || '#f0f0f0')) + ';color:' + (isUser ? (m.userBubbleTextColor || '#fff') : (m.agentBubbleTextColor || '#111')) + ';';
+    avatar.textContent = isUser ? 'U' : 'A';
+    row.appendChild(bubble);
+    row.appendChild(avatar);
+    row.dataset.msg = '1';
+    listEl.appendChild(row);
     listEl.scrollTop = listEl.scrollHeight;
   }
 
   trpcQuery('widget.getConfig', { apiKey: apiKey }).then(function(res) {
     var data = res && res.result && res.result.data && res.result.data.json;
     if (data) {
-      if (data.config) {
-        if (data.config.primaryColor) config.primaryColor = data.config.primaryColor;
-        if (data.config.welcomeMessage) config.welcomeMessage = data.config.welcomeMessage;
-        if (data.config.position) config.position = data.config.position;
-      }
       if (data.name) config.name = data.name;
+      if (data.config) {
+        var c = data.config;
+        if (c.primaryColor) config.primaryColor = c.primaryColor;
+        if (c.welcomeMessage) config.welcomeMessage = c.welcomeMessage;
+        if (c.position) config.position = c.position;
+        if (c.voiceEnabled !== undefined) config.voiceEnabled = c.voiceEnabled;
+        if (c.bubble) config.bubble = merge(c.bubble, config.bubble);
+        if (c.popup) config.popup = merge(c.popup, config.popup);
+        if (c.header) config.header = merge(c.header, config.header);
+        if (c.footer) config.footer = merge(c.footer, config.footer);
+        if (c.messages) config.messages = merge(c.messages, config.messages);
+      }
     }
     render();
   }).catch(function() { render(); });

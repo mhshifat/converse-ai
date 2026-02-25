@@ -82,7 +82,11 @@ export function DashboardShell({ userEmail, children }: DashboardShellProps) {
 
   function isActive(href: string) {
     if (href === '/dashboard') return pathname === '/dashboard';
-    if (href.startsWith('/projects/') && projectId) return pathname.startsWith(href);
+    if (href.startsWith('/projects/') && projectId) {
+      const exactProjectRoot = `/projects/${projectId}`;
+      if (href === exactProjectRoot) return pathname === exactProjectRoot || pathname === `${exactProjectRoot}/`;
+      return pathname.startsWith(href);
+    }
     return pathname.startsWith(href);
   }
 
@@ -204,17 +208,17 @@ export function DashboardShell({ userEmail, children }: DashboardShellProps) {
                               className={cn(
                                 'relative flex items-center gap-3 rounded-xl px-3 py-2 text-[13px] font-medium transition-all duration-200',
                                 active
-                                  ? 'bg-foreground text-background shadow-sm'
+                                  ? 'bg-foreground! text-background! shadow-sm data-[active=true]:bg-foreground! data-[active=true]:text-background!'
                                   : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                               )}
                             >
-                              {active && (
-                                <span
-                                  className="absolute left-2 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-background"
-                                  aria-hidden
-                                />
-                              )}
-                              <Icon className={cn('size-[18px] shrink-0', active ? 'text-background' : 'text-muted-foreground/80')} />
+                              <Icon
+                                className={cn(
+                                  'size-[18px] shrink-0',
+                                  active ? 'opacity-100' : 'text-muted-foreground'
+                                )}
+                                style={active ? { color: 'hsl(var(--background))' } : undefined}
+                              />
                               <span>{item.label}</span>
                             </Link>
                           </SidebarMenuButton>

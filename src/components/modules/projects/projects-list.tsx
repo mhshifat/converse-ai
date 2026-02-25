@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { trpc } from '@/utils/trpc';
 import Link from 'next/link';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -32,14 +33,17 @@ import {
 } from '@/components/ui/empty';
 import { FolderKanban } from 'lucide-react';
 
+const SEARCH_DEBOUNCE_MS = 250;
+
 export function ProjectsList() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search, SEARCH_DEBOUNCE_MS);
 
   const { data, isLoading, isError, error } = trpc.projects.list.useQuery({
     page,
     pageSize: 10,
-    ...(search.trim() ? { search: search.trim() } : {}),
+    ...(debouncedSearch.trim() ? { search: debouncedSearch.trim() } : {}),
   });
 
   if (isLoading) {

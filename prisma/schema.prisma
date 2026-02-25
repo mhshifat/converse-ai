@@ -60,6 +60,20 @@ model project {
   updated_at               DateTime @updatedAt
   tenant                   tenant   @relation(fields: [tenant_id], references: [id])
   chatbots                 chatbot[]
+  project_agents           project_agent[]
+}
+
+model project_agent {
+  id              String   @id @default(uuid())
+  project_id      String
+  agent_id        String
+  is_default_chat Boolean  @default(false)
+  is_default_voice Boolean @default(false)
+  created_at      DateTime @default(now())
+  project         project  @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  agent           agent    @relation(fields: [agent_id], references: [id], onDelete: Cascade)
+  @@unique([project_id, agent_id])
+  @@index([project_id])
 }
 
 model chatbot {
@@ -84,6 +98,7 @@ model agent {
   updated_at  DateTime @updatedAt
   tenant      tenant   @relation(fields: [tenant_id], references: [id])
   conversations conversation[] @relation("AgentConversations")
+  project_agents project_agent[]
 }
 
 model conversation {

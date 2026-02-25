@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
+import { ProjectAgentsContent } from '@/components/modules/projects/project-agents-content';
 
 export default async function ProjectAgentsPage({
   params,
@@ -18,8 +19,11 @@ export default async function ProjectAgentsPage({
       </Link>
       <h1 className="text-2xl font-bold tracking-tight">Project agents</h1>
       <p className="mt-1 text-muted-foreground">
-        Project-scoped agents will be configured here.
+        Assign agents to handle chat and voice conversations for this project&apos;s widget.
       </p>
+      <div className="mt-6">
+        <ProjectAgentsContent projectId={id} />
+      </div>
     </div>
   );
 }

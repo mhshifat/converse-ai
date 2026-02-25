@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { AgentProviderFactory } from '@/adapters/agent-provider-factory';
+import { getDefaultAgentForProject } from '../repositories/project-agent-repository';
 import { sendCompiledDataEmail } from './email-delivery';
 
 export async function getChatbotByApiKey(apiKey: string) {
@@ -34,7 +35,9 @@ export async function startConversation(
   if (!chatbot) return null;
 
   const tenantId = chatbot.project.tenant_id;
-  const agentId = await assignAgent(tenantId);
+  const projectId = chatbot.project.id;
+  let agentId = await getDefaultAgentForProject(projectId, channel);
+  if (!agentId) agentId = await assignAgent(tenantId);
   if (!agentId) return null;
 
   const conversation = await prisma.conversation.create({

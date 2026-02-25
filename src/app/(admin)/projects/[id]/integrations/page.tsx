@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
+import { ChatbotEmbedSection } from '@/components/modules/projects/chatbot-embed-section';
 
 export default async function ProjectIntegrationsPage({
   params,
@@ -16,10 +17,13 @@ export default async function ProjectIntegrationsPage({
           Back to project
         </Button>
       </Link>
-      <h1 className="text-2xl font-bold tracking-tight">Project integrations</h1>
+      <h1 className="text-2xl font-bold tracking-tight">Integrations</h1>
       <p className="mt-1 text-muted-foreground">
-        Project-scoped delivery integrations will be configured here.
+        Embed the chat widget and connect project-scoped integrations.
       </p>
+      <div className="mt-6 space-y-6">
+        <ChatbotEmbedSection projectId={id} />
+      </div>
     </div>
   );
 }
