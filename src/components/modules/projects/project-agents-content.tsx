@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { toast } from 'sonner';
 import { trpc } from '@/utils/trpc';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -52,6 +53,12 @@ export function ProjectAgentsContent({ projectId }: ProjectAgentsContentProps) {
     { projectId },
     { enabled: dialogOpen && mode === 'assign' }
   );
+
+  useEffect(() => {
+    if (dialogOpen && mode === 'assign' && available && available.length === 0) {
+      toast.info('No other agents available. Create one in the "Create new" tab.');
+    }
+  }, [dialogOpen, mode, available]);
 
   const assignMutation = trpc.projectAgents.assign.useMutation({
     onSuccess: () => {
@@ -204,12 +211,12 @@ export function ProjectAgentsContent({ projectId }: ProjectAgentsContentProps) {
                           {a.name}
                         </SelectItem>
                       ))}
-                      {available?.length === 0 && (
-                        <div className="py-4 text-center text-muted-foreground text-sm">
-                          No other agents available. Create one above.
-                        </div>
-                      )}
                     </SelectContent>
+                    {available?.length === 0 && (
+                      <p className="text-muted-foreground text-xs mt-1.5">
+                        No other agents available. Use &quot;Create new&quot; to add one.
+                      </p>
+                    )}
                   </Select>
                 </div>
               )}
