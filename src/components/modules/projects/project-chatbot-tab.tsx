@@ -1,12 +1,14 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
+import { toast } from 'sonner';
 import { trpc } from '@/utils/trpc';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { ImagePlus } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -43,6 +45,8 @@ export function ProjectChatbotTab({ projectId, initialChatbot }: ProjectChatbotT
   const [config, setConfig] = useState<ChatbotWidgetConfig>(() =>
     mergeWidgetConfig(initialChatbot?.config)
   );
+  const [logoUploading, setLogoUploading] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
   const debouncedConfig = useDebouncedValue(config, PREVIEW_DEBOUNCE_MS);
 
   useEffect(() => {
@@ -88,6 +92,31 @@ export function ProjectChatbotTab({ projectId, initialChatbot }: ProjectChatbotT
     []
   );
 
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLogoUploading(true);
+    e.target.value = '';
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch('/api/upload/logo', { method: 'POST', body: form });
+      const data = (await res.json()) as { url?: string; error?: string };
+      if (!res.ok) {
+        toast.error(data.error ?? 'Upload failed');
+        return;
+      }
+      if (data.url) {
+        patchNested('header', { logoUrl: data.url });
+        toast.success('Logo uploaded');
+      }
+    } catch {
+      toast.error('Logo upload failed');
+    } finally {
+      setLogoUploading(false);
+    }
+  };
+
   if (!chatbot && !getOrCreate.isPending) {
     return (
       <div className="rounded-lg border bg-card p-6">
@@ -121,12 +150,34 @@ export function ProjectChatbotTab({ projectId, initialChatbot }: ProjectChatbotT
               placeholder="e.g. Support, Chat, Help"
             />
           </Field>
-          <Field label="Logo URL (optional)">
-            <Input
-              value={config.header.logoUrl ?? ''}
-              onChange={(e) => patchNested('header', { logoUrl: e.target.value || undefined })}
-              placeholder="https://your-domain.com/logo.png"
-            />
+          <Field label="Logo">
+            <div className="flex flex-col gap-2">
+              <div className="flex gap-2 items-center">
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif,image/webp,image/svg+xml"
+                  className="hidden"
+                  onChange={handleLogoUpload}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => logoInputRef.current?.click()}
+                  disabled={logoUploading}
+                >
+                  <ImagePlus className="size-4 mr-2" />
+                  {logoUploading ? 'Uploading…' : 'Upload logo'}
+                </Button>
+                <span className="text-xs text-muted-foreground">JPEG, PNG, GIF, WebP, SVG (max 2 MB)</span>
+              </div>
+              <Input
+                value={config.header.logoUrl ?? ''}
+                onChange={(e) => patchNested('header', { logoUrl: e.target.value || undefined })}
+                placeholder="Or paste logo URL"
+              />
+            </div>
           </Field>
           <Field label="Subtitle or tagline (optional)">
             <Input
