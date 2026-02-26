@@ -620,6 +620,18 @@ export function LiveChatbotPreview({
                     </span>
                   </div>
                 )}
+                {config.showPoweredBy && (
+                  <p className="mt-2 text-center">
+                    <a
+                      href="https://converseai.com"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[10px] text-muted-foreground hover:text-foreground hover:underline"
+                    >
+                      Powered by ConverseAI
+                    </a>
+                  </p>
+                )}
               </div>
             </div>
           )}

@@ -36,6 +36,7 @@ const EMBED_SCRIPT = `
     primaryColor: '#2563eb',
     welcomeMessage: 'How can I help?',
     position: 'bottom-right',
+    showPoweredBy: true,
     name: 'Chat',
     bubble: { size: 56, borderRadius: 50, backgroundColor: '#2563eb', iconColor: '#ffffff', shadow: '0 4px 12px rgba(0,0,0,0.15)' },
     popup: { width: 380, height: 420, borderRadius: 16, shadow: '0 8px 32px rgba(0,0,0,0.12)', backgroundColor: '#ffffff' },
@@ -316,6 +317,20 @@ const EMBED_SCRIPT = `
     voiceRow.appendChild(voiceBtn);
     voiceRow.appendChild(voiceLabel);
     footerWrap.appendChild(voiceRow);
+    if (config.showPoweredBy !== false) {
+      var poweredBy = document.createElement('div');
+      poweredBy.style.cssText = 'margin-top:8px;text-align:center;';
+      var poweredByLink = document.createElement('a');
+      poweredByLink.href = 'https://converseai.com';
+      poweredByLink.target = '_blank';
+      poweredByLink.rel = 'noopener noreferrer';
+      poweredByLink.textContent = 'Powered by ConverseAI';
+      poweredByLink.style.cssText = 'font-size:10px;color:#999;text-decoration:none;';
+      poweredByLink.onmouseenter = function() { poweredByLink.style.textDecoration = 'underline'; poweredByLink.style.color = '#666'; };
+      poweredByLink.onmouseleave = function() { poweredByLink.style.textDecoration = 'none'; poweredByLink.style.color = '#999'; };
+      poweredBy.appendChild(poweredByLink);
+      footerWrap.appendChild(poweredBy);
+    }
     panel.appendChild(footerWrap);
     root.appendChild(panel);
     var m = config.messages || {};
@@ -365,6 +380,7 @@ const EMBED_SCRIPT = `
         if (c.welcomeMessage) config.welcomeMessage = c.welcomeMessage;
         if (c.position) config.position = c.position;
         if (c.voiceEnabled !== undefined) config.voiceEnabled = c.voiceEnabled;
+        if (c.showPoweredBy !== undefined) config.showPoweredBy = c.showPoweredBy;
         if (c.bubble) config.bubble = merge(c.bubble, config.bubble);
         if (c.popup) config.popup = merge(c.popup, config.popup);
         if (c.header) config.header = merge(c.header, config.header);

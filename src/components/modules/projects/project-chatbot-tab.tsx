@@ -156,6 +156,13 @@ export function ProjectChatbotTab({ projectId, initialChatbot }: ProjectChatbotT
               }}
             />
           </Field>
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={config.showPoweredBy}
+              onCheckedChange={(v) => patch('showPoweredBy', v)}
+            />
+            <Label>Show &quot;Powered by ConverseAI&quot; in widget footer</Label>
+          </div>
         </Section>
 
         {/* General */}
