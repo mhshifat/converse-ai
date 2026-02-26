@@ -4,23 +4,16 @@ import { withCorrelationError, throwNotFoundWithId, throwBadRequestWithId } from
 import * as integrationRepo from '../repositories/integration-repository';
 
 const configByType = {
+  /** Email/SMS are system-configured (env). Integration only stores optional to/from override. */
   email: z.object({
-    from: z.string().email().optional(),
     to: z.string().email().optional(),
-    apiKey: z.string().optional(),
-    domain: z.string().optional(),
-    host: z.string().optional(),
-    port: z.number().int().optional(),
-    user: z.string().optional(),
-    pass: z.string().optional(),
-    secure: z.boolean().optional(),
+    from: z.string().email().optional(),
   }),
   discord: z.object({
     webhookUrl: z.string().url(),
   }),
   sms: z.object({
-    accountSid: z.string().optional(),
-    authToken: z.string().optional(),
+    to: z.string().optional(),
     from: z.string().optional(),
   }),
 };

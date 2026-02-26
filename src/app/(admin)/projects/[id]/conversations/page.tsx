@@ -1,9 +1,9 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
-import { ProjectIntegrationsContent } from '@/components/modules/projects/project-integrations-content';
+import { ConversationsList } from '@/components/modules/projects/conversations-list';
 
-export default async function ProjectIntegrationsPage({
+export default async function ProjectConversationsPage({
   params,
 }: {
   params: Promise<{ id: string }>;
@@ -17,12 +17,12 @@ export default async function ProjectIntegrationsPage({
           Back to project
         </Button>
       </Link>
-      <h1 className="text-2xl font-bold tracking-tight">Integrations</h1>
+      <h1 className="text-2xl font-bold tracking-tight">Conversations</h1>
       <p className="mt-1 text-muted-foreground">
-        Website chat widget and delivery integrations (Discord, email, SMS, endpoints).
+        View all chat and voice conversations for this project. Open one to see the full transcript and compiled data.
       </p>
       <div className="mt-6">
-        <ProjectIntegrationsContent projectId={id} />
+        <ConversationsList projectId={id} />
       </div>
     </div>
   );

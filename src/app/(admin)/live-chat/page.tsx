@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
 
-export default function NewIntegrationPage() {
+export default function LiveChatPage() {
   redirect('/dashboard');
 }

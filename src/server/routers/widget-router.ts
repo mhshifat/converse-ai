@@ -67,4 +67,24 @@ export const widgetRouter = router({
         return result;
       });
     }),
+
+  requestHumanHandoff: publicProcedure
+    .input(z.object({ conversationId: z.string().uuid() }))
+    .mutation(async ({ input }) => {
+      return withCorrelationError('widget.requestHumanHandoff', async (correlationId) => {
+        const ok = await conversationService.requestHumanHandoff(input.conversationId);
+        if (!ok) throwNotFoundWithId(correlationId, 'Conversation not found or already ended');
+        return { success: true };
+      });
+    }),
+
+  getMessages: publicProcedure
+    .input(z.object({ conversationId: z.string().uuid() }))
+    .query(async ({ input }) => {
+      return withCorrelationError('widget.getMessages', async (correlationId) => {
+        const data = await conversationService.getConversationMessagesForWidget(input.conversationId);
+        if (!data) throwNotFoundWithId(correlationId, 'Conversation not found');
+        return data;
+      });
+    }),
 });

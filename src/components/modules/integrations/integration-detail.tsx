@@ -23,7 +23,7 @@ export function IntegrationDetail({ integration }: IntegrationDetailProps) {
 
   return (
     <div>
-      <Link href="/dashboard/integrations">
+      <Link href="/integrations">
         <Button variant="ghost" size="sm" className="mb-4 -ml-2">
           <ArrowLeft className="h-4 w-4 mr-1" />
           Back to integrations
@@ -37,7 +37,7 @@ export function IntegrationDetail({ integration }: IntegrationDetailProps) {
         integrationId={integration.id}
         type={integration.type}
         defaultConfig={integration.config}
-        onDeleted={() => router.push('/dashboard/integrations')}
+        onDeleted={() => router.push('/integrations')}
       />
     </div>
   );

@@ -63,6 +63,7 @@ export const projectsRouter = router({
         icon: z.string().optional().nullable(),
         dataSchema: z.unknown().optional(),
         deliveryIntegrationIds: z.array(z.string().uuid()).optional(),
+        conversationMode: z.enum(['human_only', 'ai_only', 'both']).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {

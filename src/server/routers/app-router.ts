@@ -7,6 +7,9 @@ import { projectKnowledgeRouter } from './project-knowledge-router';
 import { integrationsRouter } from './integrations-router';
 import { widgetRouter } from './widget-router';
 import { chatbotRouter } from './chatbot-router';
+import { conversationsRouter } from './conversations-router';
+import { liveChatRouter } from './live-chat-router';
+import { humanAgentsRouter } from './human-agents-router';
 import { publicProcedure, router } from '@/server/trpc';
 
 export const appRouter = router({
@@ -20,6 +23,9 @@ export const appRouter = router({
   integrations: integrationsRouter,
   widget: widgetRouter,
   chatbot: chatbotRouter,
+  conversations: conversationsRouter,
+  liveChat: liveChatRouter,
+  humanAgents: humanAgentsRouter,
 });
 
 export type AppRouter = typeof appRouter;

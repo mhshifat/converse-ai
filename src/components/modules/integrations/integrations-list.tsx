@@ -68,12 +68,13 @@ export function IntegrationsList() {
             </EmptyMedia>
             <EmptyTitle>No integrations yet</EmptyTitle>
             <EmptyDescription>
-              Add email, Discord, or SMS to receive compiled conversation data.
+              Add email, Discord, or SMS from a project: open a project → Integrations → Delivery
+              integrations.
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
-            <Link href="/dashboard/integrations/new">
-              <Button>Add integration</Button>
+            <Link href="/dashboard">
+              <Button>Go to dashboard</Button>
             </Link>
           </EmptyContent>
         </Empty>
@@ -97,13 +98,13 @@ export function IntegrationsList() {
                   {i.type === 'discord' && 'webhookUrl' in i.config
                     ? String(i.config.webhookUrl).slice(0, 40) + '…'
                     : i.type === 'email'
-                      ? (i.config.from as string) ?? '—'
+                      ? (i.config.to as string) ?? (i.config.from as string) ?? 'System default'
                       : i.type === 'sms'
-                        ? (i.config.from as string) ?? '—'
+                        ? (i.config.to as string) ?? (i.config.from as string) ?? 'System default'
                         : '—'}
                 </TableCell>
                 <TableCell>
-                  <Link href={`/dashboard/integrations/${i.id}`}>
+                  <Link href={`/integrations/${i.id}`}>
                     <Button variant="outline" size="sm">
                       Edit
                     </Button>

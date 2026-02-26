@@ -22,7 +22,13 @@ export async function buildContextForProject(projectId: string): Promise<string>
     parts.push('Knowledge from external source:\n' + externalContext);
   }
   if (parts.length === 0) return '';
-  return '\n\n--- Use the following when answering. Do not make up facts not stated here. ---\n\n' + parts.join('\n\n');
+  return (
+    '\n\n--- KNOWLEDGE BASE (use this when answering) ---\n' +
+    'You must use the knowledge below to answer the user. Base your answers on this content. ' +
+    'If the user asks something that is not covered here, say you do not have that information rather than inventing it. ' +
+    'When the knowledge is relevant, use it directly.\n---\n\n' +
+    parts.join('\n\n')
+  );
 }
 
 async function fetchExternalKnowledge(projectId: string): Promise<string> {

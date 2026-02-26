@@ -29,9 +29,6 @@ const typeSchema = z.enum(['email', 'discord', 'sms']);
 
 const emailConfigSchema = z.object({
   type: z.literal('email'),
-  from: z.string().email().optional(),
-  apiKey: z.string().optional(),
-  domain: z.string().optional(),
 });
 
 const discordConfigSchema = z.object({
@@ -41,12 +38,16 @@ const discordConfigSchema = z.object({
 
 const smsConfigSchema = z.object({
   type: z.literal('sms'),
-  accountSid: z.string().optional(),
-  authToken: z.string().optional(),
+  to: z.string().optional(),
   from: z.string().optional(),
 });
 
-export function CreateIntegrationForm() {
+interface CreateIntegrationFormProps {
+  /** Redirect here after creating (e.g. /projects/123/integrations). If not set, redirects to /integrations */
+  returnTo?: string;
+}
+
+export function CreateIntegrationForm({ returnTo }: CreateIntegrationFormProps) {
   const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
   const [type, setType] = useState<'email' | 'discord' | 'sms'>('discord');
@@ -62,17 +63,14 @@ export function CreateIntegrationForm() {
     defaultValues: {
       type: 'discord' as const,
       webhookUrl: '',
+      to: '',
       from: '',
-      apiKey: '',
-      domain: '',
-      accountSid: '',
-      authToken: '',
     },
   });
 
   const create = trpc.integrations.create.useMutation({
     onSuccess: () => {
-      router.push('/dashboard/integrations');
+      router.push(returnTo ?? '/integrations');
     },
     onError: (err) => setServerError(err.message),
   });
@@ -80,14 +78,7 @@ export function CreateIntegrationForm() {
   const onSubmit = form.handleSubmit((data) => {
     setServerError(null);
     if (type === 'email') {
-      create.mutate({
-        type: 'email',
-        config: {
-          from: data.from || undefined,
-          apiKey: data.apiKey || undefined,
-          domain: data.domain || undefined,
-        },
-      });
+      create.mutate({ type: 'email', config: {} });
     } else if (type === 'discord') {
       create.mutate({
         type: 'discord',
@@ -97,8 +88,7 @@ export function CreateIntegrationForm() {
       create.mutate({
         type: 'sms',
         config: {
-          accountSid: data.accountSid || undefined,
-          authToken: data.authToken || undefined,
+          to: data.to || undefined,
           from: data.from || undefined,
         },
       });
@@ -158,71 +148,25 @@ export function CreateIntegrationForm() {
           />
         )}
         {type === 'email' && (
-          <>
-            <FormField
-              control={form.control}
-              name="from"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>From email</FormLabel>
-                  <FormControl>
-                    <Input type="email" placeholder="noreply@example.com" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="domain"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Domain (e.g. for Mailgun)</FormLabel>
-                  <FormControl>
-                    <Input placeholder="mg.example.com" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="apiKey"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>API key (store securely)</FormLabel>
-                  <FormControl>
-                    <Input type="password" placeholder="••••••••" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </>
+          <p className="text-muted-foreground text-sm">
+            Email sending uses system configuration (SMTP via env). Add this integration to enable
+            email delivery for a project. Recipients and sender are configured in your environment.
+          </p>
         )}
         {type === 'sms' && (
           <>
+            <p className="text-muted-foreground text-sm">
+              SMS sending uses system configuration (e.g. Twilio via env). Add this integration to
+              enable delivery for a project; optionally set the destination number.
+            </p>
             <FormField
               control={form.control}
-              name="accountSid"
+              name="to"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Account SID (Twilio)</FormLabel>
+                  <FormLabel>Send to (optional)</FormLabel>
                   <FormControl>
-                    <Input placeholder="AC..." {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="authToken"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Auth token</FormLabel>
-                  <FormControl>
-                    <Input type="password" placeholder="••••••••" {...field} />
+                    <Input placeholder="+1234567890" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -233,7 +177,7 @@ export function CreateIntegrationForm() {
               name="from"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>From number</FormLabel>
+                  <FormLabel>From number (optional override)</FormLabel>
                   <FormControl>
                     <Input placeholder="+1234567890" {...field} />
                   </FormControl>

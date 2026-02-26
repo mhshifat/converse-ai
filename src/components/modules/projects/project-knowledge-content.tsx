@@ -30,8 +30,11 @@ interface ProjectKnowledgeContentProps {
   projectId: string;
 }
 
+type ViewEntry = { id: string; title: string | null; content: string };
+
 export function ProjectKnowledgeContent({ projectId }: ProjectKnowledgeContentProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [viewEntry, setViewEntry] = useState<ViewEntry | null>(null);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [externalUrl, setExternalUrl] = useState('');
@@ -142,7 +145,7 @@ export function ProjectKnowledgeContent({ projectId }: ProjectKnowledgeContentPr
         <p className="text-muted-foreground text-sm max-w-2xl">
           Everything you add here is injected into the agent&apos;s context when a customer chats or
           calls. The agent will use this data to answer questions—FAQs, product info, policies, etc.
-          You can add entries manually, import from PDF/DOCX/Excel/CSV/TXT or a website URL, or point
+          You can add entries manually, import from PDF/DOCX/Excel/CSV/TXT/HTML or a website URL, or point
           to an external API URL that returns JSON or plain text at reply time.
         </p>
       </div>
@@ -154,7 +157,7 @@ export function ProjectKnowledgeContent({ projectId }: ProjectKnowledgeContentPr
           Import from file or website
         </h3>
         <p className="text-muted-foreground text-xs mb-4">
-          Upload a PDF, Word doc, Excel, CSV, or TXT—or paste a webpage URL. Text will be extracted
+          Upload a PDF, Word doc, Excel, CSV, TXT, or HTML file—or paste a webpage URL. Text will be extracted
           and added as a knowledge entry (max 15 MB per file).
         </p>
         <div className="flex flex-wrap items-end gap-4">
@@ -162,7 +165,7 @@ export function ProjectKnowledgeContent({ projectId }: ProjectKnowledgeContentPr
             <input
               ref={fileInputRef}
               type="file"
-              accept=".pdf,.docx,.doc,.xlsx,.xls,.csv,.txt"
+              accept=".pdf,.docx,.doc,.xlsx,.xls,.csv,.txt,.html,.htm"
               className="hidden"
               onChange={handleImportFile}
               disabled={ingesting}
@@ -248,7 +251,7 @@ export function ProjectKnowledgeContent({ projectId }: ProjectKnowledgeContentPr
                   product description).
                 </DialogDescription>
               </DialogHeader>
-              <div className="space-y-4">
+              <div className="space-y-4 min-h-0 overflow-y-auto">
                 <div>
                   <Label>Title (optional)</Label>
                   <Input
@@ -265,7 +268,7 @@ export function ProjectKnowledgeContent({ projectId }: ProjectKnowledgeContentPr
                     onChange={(e) => setContent(e.target.value)}
                     placeholder="Paste or type the content the agent should use when answering..."
                     rows={6}
-                    className="mt-1"
+                    className="mt-1 min-h-[120px] max-h-[40vh] resize-y overflow-y-auto"
                   />
                 </div>
               </div>
@@ -308,25 +311,33 @@ export function ProjectKnowledgeContent({ projectId }: ProjectKnowledgeContentPr
             </EmptyContent>
           </Empty>
         ) : (
+          <>
           <div className="space-y-3">
             {items?.map((item) => (
               <div
                 key={item.id}
                 className="rounded-xl border border-border/50 bg-card p-4 flex flex-wrap items-start justify-between gap-4"
               >
-                <div className="min-w-0 flex-1">
+                <button
+                  type="button"
+                  className="min-w-0 flex-1 text-left focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-lg -m-1 p-1"
+                  onClick={() => setViewEntry({ id: item.id, title: item.title, content: item.content })}
+                >
                   {item.title && (
                     <p className="font-medium text-foreground text-sm">{item.title}</p>
                   )}
                   <p className="text-muted-foreground text-sm mt-0.5 line-clamp-3">
                     {item.content}
                   </p>
-                </div>
+                </button>
                 <Button
                   variant="ghost"
                   size="icon"
                   className="text-muted-foreground hover:text-destructive shrink-0"
-                  onClick={() => removeMutation.mutate({ projectId, id: item.id })}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeMutation.mutate({ projectId, id: item.id });
+                  }}
                   disabled={removeMutation.isPending}
                 >
                   <Trash2 className="size-4" />
@@ -334,6 +345,25 @@ export function ProjectKnowledgeContent({ projectId }: ProjectKnowledgeContentPr
               </div>
             ))}
           </div>
+
+          <Dialog open={!!viewEntry} onOpenChange={(open) => !open && setViewEntry(null)}>
+            <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+              <DialogHeader>
+                <DialogTitle className="pr-8">
+                  {viewEntry?.title ?? 'Knowledge entry'}
+                </DialogTitle>
+                <DialogDescription>
+                  Full content of this knowledge entry. The agent uses this when answering.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+                <div className="flex-1 overflow-y-auto rounded-lg border border-border/60 bg-muted/20 p-4 text-sm text-foreground whitespace-pre-wrap wrap-break-word">
+                  {viewEntry?.content ?? ''}
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+          </>
         )}
       </div>
     </div>

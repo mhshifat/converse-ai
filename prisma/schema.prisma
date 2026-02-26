@@ -10,15 +10,30 @@ datasource db {
 }
 
 model tenant {
-  id          String   @id @default(uuid())
-  name        String
-  slug        String   @unique
-  created_at  DateTime @default(now())
-  updated_at  DateTime @updatedAt
-  users       user[]
-  projects    project[]
-  agents      agent[]
+  id           String   @id @default(uuid())
+  name         String
+  slug         String   @unique
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+  users        user[]
+  projects     project[]
+  agents       agent[]
   integrations integration[]
+  human_agents human_agent[]
+}
+
+model human_agent {
+  id           String   @id @default(uuid())
+  tenant_id    String
+  user_id      String
+  display_name String?
+  is_available Boolean  @default(false)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+  tenant       tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  @@unique([tenant_id, user_id])
+  @@index([tenant_id])
+  @@index([tenant_id, is_available])
 }
 
 model user {
@@ -57,6 +72,7 @@ model project {
   data_schema              Json?    // JSON schema for extracting structured data from conversations
   delivery_integration_ids  Json?    // array of integration ids for email/discord/sms delivery
   knowledge_base_url       String?  // optional URL to fetch external knowledge (GET JSON array of { content } or text)
+  conversation_mode        String?  @default("both") // 'human_only' | 'ai_only' | 'both'
   created_at               DateTime @default(now())
   updated_at               DateTime @updatedAt
   tenant                   tenant   @relation(fields: [tenant_id], references: [id])
@@ -115,24 +131,27 @@ model agent {
 }
 
 model conversation {
-  id            String   @id @default(uuid())
-  chatbot_id    String
-  customer_id   String
-  agent_id      String
-  channel       String   // 'text' | 'call'
-  status        String   // 'active' | 'closed'
-  compiled_data Json?    // structured data extracted when conversation ends
-  started_at    DateTime @default(now())
-  ended_at      DateTime?
-  chatbot       chatbot  @relation(fields: [chatbot_id], references: [id])
-  agent         agent    @relation("AgentConversations", fields: [agent_id], references: [id])
-  messages      message[]
+  id                      String    @id @default(uuid())
+  chatbot_id              String
+  customer_id             String
+  agent_id                String
+  channel                 String    // 'text' | 'call'
+  status                  String    // 'active' | 'closed'
+  compiled_data           Json?     // structured data extracted when conversation ends
+  started_at              DateTime  @default(now())
+  ended_at                DateTime?
+  handoff_requested_at     DateTime? // when customer asked for a human
+  assigned_human_agent_id String?   // user_id of human agent when assigned
+  chatbot                 chatbot   @relation(fields: [chatbot_id], references: [id])
+  agent                   agent     @relation("AgentConversations", fields: [agent_id], references: [id])
+  messages                message[]
+  @@index([handoff_requested_at, assigned_human_agent_id])
 }
 
 model message {
   id               String   @id @default(uuid())
   conversation_id  String
-  sender_type      String   // 'customer' | 'agent'
+  sender_type      String   // 'customer' | 'agent' | 'human_agent'
   sender_id        String
   content          String
   created_at       DateTime @default(now())

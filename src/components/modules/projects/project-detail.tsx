@@ -28,6 +28,7 @@ interface ProjectDetailProps {
     icon?: string | null;
     dataSchema?: unknown;
     deliveryIntegrationIds?: string[];
+    conversationMode?: 'human_only' | 'ai_only' | 'both';
     createdAt: Date;
     updatedAt: Date;
     chatbots: ChatbotConfig[];
@@ -302,6 +303,7 @@ export function ProjectDetail({ project }: ProjectDetailProps) {
             projectId={project.id}
             dataSchema={project.dataSchema}
             deliveryIntegrationIds={project.deliveryIntegrationIds ?? []}
+            conversationMode={project.conversationMode ?? 'both'}
           />
         </TabsContent>
       </Tabs>

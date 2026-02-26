@@ -1,9 +1,9 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
-import { ProjectIntegrationsContent } from '@/components/modules/projects/project-integrations-content';
+import { PlaygroundContent } from '@/components/modules/projects/playground-content';
 
-export default async function ProjectIntegrationsPage({
+export default async function ProjectPlaygroundPage({
   params,
 }: {
   params: Promise<{ id: string }>;
@@ -17,12 +17,12 @@ export default async function ProjectIntegrationsPage({
           Back to project
         </Button>
       </Link>
-      <h1 className="text-2xl font-bold tracking-tight">Integrations</h1>
+      <h1 className="text-2xl font-bold tracking-tight">Playground</h1>
       <p className="mt-1 text-muted-foreground">
-        Website chat widget and delivery integrations (Discord, email, SMS, endpoints).
+        Test the full chatbot flow as a customer: start a conversation, send messages or simulate a call, and complete the flow before embedding on your site.
       </p>
       <div className="mt-6">
-        <ProjectIntegrationsContent projectId={id} />
+        <PlaygroundContent projectId={id} />
       </div>
     </div>
   );

@@ -70,6 +70,7 @@ export async function getProjectById(projectId: string, tenantId: string) {
     icon: project.icon,
     dataSchema: project.data_schema,
     deliveryIntegrationIds: project.delivery_integration_ids,
+    conversationMode: (project.conversation_mode as 'human_only' | 'ai_only' | 'both') ?? 'both',
     createdAt: project.created_at,
     updatedAt: project.updated_at,
     chatbots: project.chatbots.map((c) => ({
@@ -120,6 +121,7 @@ export async function updateProject(
     icon?: string | null;
     dataSchema?: unknown;
     deliveryIntegrationIds?: string[];
+    conversationMode?: 'human_only' | 'ai_only' | 'both';
   }
 ) {
   const project = await prisma.project.findFirst({
@@ -137,6 +139,7 @@ export async function updateProject(
       ...(data.deliveryIntegrationIds !== undefined && {
         delivery_integration_ids: data.deliveryIntegrationIds,
       }),
+      ...(data.conversationMode !== undefined && { conversation_mode: data.conversationMode }),
     },
   });
   return {
@@ -147,6 +150,7 @@ export async function updateProject(
     icon: updated.icon,
     dataSchema: updated.data_schema,
     deliveryIntegrationIds: updated.delivery_integration_ids,
+    conversationMode: (updated.conversation_mode as 'human_only' | 'ai_only' | 'both') ?? 'both',
     createdAt: updated.created_at,
     updatedAt: updated.updated_at,
   };

@@ -35,7 +35,7 @@ const cards: BentoCard[] = [
     delay: 1,
   },
   {
-    href: '/dashboard/integrations',
+    href: '/integrations',
     title: 'Integrations',
     description: 'Email, Discord, and SMS for delivering conversation data.',
     icon: Plug,

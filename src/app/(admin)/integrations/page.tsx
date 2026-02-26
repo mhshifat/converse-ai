@@ -6,8 +6,7 @@ export default function IntegrationsPage() {
     <div className="p-5 sm:p-6 md:p-8 lg:p-10">
       <DashboardPageHeader
         title="Integrations"
-        description="Email, Discord, and SMS for delivering compiled conversation data."
-        action={{ label: 'Add integration', href: '/dashboard/integrations/new' }}
+        description="Email, Discord, and SMS for delivering compiled conversation data. Add new integrations from a project: open a project → Integrations → Delivery integrations."
       />
       <IntegrationsList />
     </div>

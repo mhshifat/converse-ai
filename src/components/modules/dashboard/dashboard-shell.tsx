@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -29,15 +29,28 @@ import { trpc } from '@/utils/trpc';
 import {
   Bot,
   BookOpen,
+  MessageSquare,
   Plug,
+  Play,
   LogOut,
   Search,
   Home,
   ArrowLeft,
   ChevronDown,
+  MessageCircle,
+  UserCircle,
+  Bell,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { DashboardBackground } from './dashboard-bg';
+import { toast } from 'sonner';
+import {
+  isNotificationSoundEnabled,
+  setNotificationSoundEnabled,
+  playNotificationSound,
+} from '@/lib/notification-sound';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 
 interface DashboardShellProps {
@@ -52,9 +65,47 @@ function getInitials(email: string): string {
 export function DashboardShell({ userEmail, children }: DashboardShellProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const [soundEnabled, setSoundEnabled] = React.useState(true);
+  React.useEffect(() => {
+    setSoundEnabled(isNotificationSoundEnabled());
+  }, []);
+
   const logout = trpc.auth.logout.useMutation({
     onSuccess: () => router.push('/login'),
   });
+
+  const { data: handoffData } = trpc.liveChat.listHandoffConversations.useQuery(
+    undefined,
+    { refetchInterval: 8000 }
+  );
+  const unassigned = handoffData?.unassigned ?? [];
+  const prevUnassignedIdsRef = useRef<Set<string>>(new Set());
+  const isFirstLoadRef = useRef(true);
+
+  useEffect(() => {
+    const list = handoffData?.unassigned ?? [];
+    if (!handoffData || isFirstLoadRef.current) {
+      if (handoffData?.unassigned) isFirstLoadRef.current = false;
+      prevUnassignedIdsRef.current = new Set(list.map((c) => c.id));
+      return;
+    }
+    const prev = prevUnassignedIdsRef.current;
+    const currentIds = new Set(list.map((c) => c.id));
+    const newIds = list.filter((c) => !prev.has(c.id));
+    if (newIds.length > 0) {
+      toast.info(
+        `${newIds.length} new conversation${newIds.length > 1 ? 's' : ''} waiting for agent`,
+        { duration: 5000 }
+      );
+      playNotificationSound();
+    }
+    prevUnassignedIdsRef.current = currentIds;
+  }, [handoffData]);
+
+  const handleSoundToggle = (checked: boolean) => {
+    setNotificationSoundEnabled(checked);
+    setSoundEnabled(checked);
+  };
 
   const userBlock = (
     <div className="flex w-full items-center gap-2.5 rounded-full border border-border/70 bg-muted/50 px-1.5 py-1.5 shadow-sm transition-colors hover:bg-muted/70">
@@ -96,7 +147,11 @@ export function DashboardShell({ userEmail, children }: DashboardShellProps) {
         { href: `/projects/${projectId}`, label: 'Overview', icon: Home },
         { href: `/projects/${projectId}/agents`, label: 'Agents', icon: Bot },
         { href: `/projects/${projectId}/knowledge`, label: 'Knowledge', icon: BookOpen },
+        { href: `/projects/${projectId}/conversations`, label: 'Conversations', icon: MessageSquare },
         { href: `/projects/${projectId}/integrations`, label: 'Integrations', icon: Plug },
+        { href: `/projects/${projectId}/playground`, label: 'Playground', icon: Play },
+        { href: `/projects/${projectId}/live-chat`, label: 'Live chat', icon: MessageCircle },
+        { href: `/projects/${projectId}/human-agents`, label: 'Human agents', icon: UserCircle },
       ]
     : null;
 
@@ -113,10 +168,61 @@ export function DashboardShell({ userEmail, children }: DashboardShellProps) {
             ⌘K
           </kbd>
         </div>
-        <div className="ml-auto flex w-auto items-center self-center">
+        <div className="ml-auto flex w-auto items-center gap-2 self-center">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button type="button" className="w-full shrink-0 text-left outline-none rounded-full [&>div]:h-auto">
+              <button
+                type="button"
+                className="shrink-0 relative flex size-10! items-center justify-center rounded-lg border border-border/60 bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                aria-label="Notifications"
+              >
+                <Bell className="size-5" />
+                {unassigned.length > 0 && (
+                  <span className="absolute -right-1 -top-1 flex min-w-[20px] h-5 items-center justify-center rounded-full bg-destructive px-1.5 text-xs font-bold text-white shadow-sm ring-2 ring-background">
+                    {unassigned.length > 99 ? '99+' : unassigned.length}
+                  </span>
+                )}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[240px]">
+              <div className="px-2 py-2 border-b border-border/60">
+                <p className="text-sm font-medium">
+                  {unassigned.length === 0
+                    ? 'No conversations waiting'
+                    : `${unassigned.length} conversation${unassigned.length !== 1 ? 's' : ''} waiting for agent`}
+                </p>
+                {projectId && unassigned.length > 0 && (
+                  <DropdownMenuItem asChild className="mt-2 p-0">
+                    <Link href={`/projects/${projectId}/live-chat`} className="flex items-center gap-2 py-2">
+                      <MessageCircle className="size-4" />
+                      Open Live chat
+                    </Link>
+                  </DropdownMenuItem>
+                )}
+                {!projectId && unassigned.length > 0 && (
+                  <DropdownMenuItem asChild className="mt-2 p-0">
+                    <Link href="/projects" className="flex items-center gap-2 py-2">
+                      Open a project → Live chat
+                    </Link>
+                  </DropdownMenuItem>
+                )}
+              </div>
+              <div className="flex items-center justify-between gap-2 px-2 py-2">
+                <Label htmlFor="notification-sound" className="text-sm cursor-pointer flex-1">
+                  Notification sound
+                </Label>
+                <Switch
+                  id="notification-sound"
+                  checked={soundEnabled}
+                  onCheckedChange={handleSoundToggle}
+                  size="sm"
+                />
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button type="button" className="w-full shrink text-left outline-none rounded-full [&>div]:h-auto">
                 {userBlock}
               </button>
             </DropdownMenuTrigger>

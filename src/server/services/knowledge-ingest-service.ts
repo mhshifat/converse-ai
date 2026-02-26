@@ -92,12 +92,16 @@ export async function ingestFile(
       case 'txt':
         text = extractTxt(buffer);
         break;
+      case 'html':
+      case 'htm':
+        text = extractHtml(buffer.toString('utf-8'));
+        break;
       default:
         return {
           success: false,
           title: filename,
           entriesCreated: 0,
-          error: `Unsupported file type: .${ext}. Use PDF, DOCX, XLSX, CSV, or TXT.`,
+          error: `Unsupported file type: .${ext}. Use PDF, DOCX, XLSX, CSV, TXT, or HTML.`,
         };
     }
   } catch (err) {

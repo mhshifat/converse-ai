@@ -141,13 +141,14 @@ export function ProjectAgentsContent({ projectId }: ProjectAgentsContentProps) {
                 Add agent
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
+            <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col">
+              <DialogHeader className="shrink-0">
                 <DialogTitle>Add agent to project</DialogTitle>
                 <DialogDescription>
                   Create a new agent or assign an existing one from your tenant.
                 </DialogDescription>
               </DialogHeader>
+              <div className="flex-1 min-h-0 overflow-y-auto">
               <div className="flex gap-2 py-2">
                 <Button
                   variant={mode === 'create' ? 'default' : 'outline'}
@@ -181,8 +182,8 @@ export function ProjectAgentsContent({ projectId }: ProjectAgentsContentProps) {
                       value={systemPrompt}
                       onChange={(e) => setSystemPrompt(e.target.value)}
                       placeholder="You are a helpful support agent. Be concise and friendly."
-                      rows={4}
-                      className="mt-1"
+                      rows={6}
+                      className="mt-1 min-h-[120px] max-h-[40vh] resize-y overflow-y-auto"
                     />
                   </div>
                   <div>
@@ -220,7 +221,8 @@ export function ProjectAgentsContent({ projectId }: ProjectAgentsContentProps) {
                   </Select>
                 </div>
               )}
-              <DialogFooter>
+              </div>
+              <DialogFooter className="shrink-0">
                 <Button variant="outline" onClick={() => setDialogOpen(false)}>
                   Cancel
                 </Button>

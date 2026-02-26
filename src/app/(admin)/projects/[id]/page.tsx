@@ -33,6 +33,7 @@ export default async function ProjectDetailPage({
           deliveryIntegrationIds: Array.isArray(project.delivery_integration_ids)
             ? (project.delivery_integration_ids as string[])
             : undefined,
+          conversationMode: (project.conversation_mode as 'human_only' | 'ai_only' | 'both') ?? 'both',
           createdAt: project.created_at,
           updatedAt: project.updated_at,
           chatbots: project.chatbots.map((c) => ({

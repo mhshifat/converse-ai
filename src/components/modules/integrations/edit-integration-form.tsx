@@ -30,13 +30,11 @@ import {
 
 const discordSchema = z.object({ webhookUrl: z.string().url() });
 const emailSchema = z.object({
+  to: z.string().email().optional(),
   from: z.string().email().optional(),
-  domain: z.string().optional(),
-  apiKey: z.string().optional(),
 });
 const smsSchema = z.object({
-  accountSid: z.string().optional(),
-  authToken: z.string().optional(),
+  to: z.string().optional(),
   from: z.string().optional(),
 });
 
@@ -54,6 +52,7 @@ export function EditIntegrationForm({
   onDeleted,
 }: EditIntegrationFormProps) {
   const [serverError, setServerError] = React.useState<string | null>(null);
+  const utils = trpc.useUtils();
 
   const schema =
     type === 'discord'
@@ -66,18 +65,14 @@ export function EditIntegrationForm({
     resolver: zodResolver(schema),
     defaultValues: {
       webhookUrl: (defaultConfig.webhookUrl as string) ?? '',
+      to: (defaultConfig.to as string) ?? '',
       from: (defaultConfig.from as string) ?? '',
-      domain: (defaultConfig.domain as string) ?? '',
-      apiKey: '',
-      accountSid: (defaultConfig.accountSid as string) ?? '',
-      authToken: '',
-      ...defaultConfig,
     },
   });
 
   const update = trpc.integrations.update.useMutation({
     onSuccess: () => {
-      trpc.useUtils().integrations.list.invalidate();
+      void utils.integrations.list.invalidate();
     },
     onError: (err) => setServerError(err.message),
   });
@@ -93,12 +88,8 @@ export function EditIntegrationForm({
       type === 'discord'
         ? { webhookUrl: data.webhookUrl }
         : type === 'email'
-          ? { from: data.from, domain: data.domain, apiKey: data.apiKey || undefined }
-          : {
-              accountSid: data.accountSid,
-              authToken: data.authToken || undefined,
-              from: data.from,
-            };
+          ? { to: data.to || undefined, from: data.from || undefined }
+          : { to: data.to || undefined, from: data.from || undefined };
     update.mutate({ id: integrationId, config });
   });
 
@@ -127,71 +118,23 @@ export function EditIntegrationForm({
           />
         )}
         {type === 'email' && (
-          <>
-            <FormField
-              control={form.control}
-              name="from"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>From email</FormLabel>
-                  <FormControl>
-                    <Input type="email" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="domain"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Domain</FormLabel>
-                  <FormControl>
-                    <Input {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="apiKey"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>API key (leave blank to keep existing)</FormLabel>
-                  <FormControl>
-                    <Input type="password" placeholder="••••••••" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </>
+          <p className="text-muted-foreground text-sm">
+            Email delivery is enabled. Sender and recipients are configured via system environment (SMTP).
+          </p>
         )}
         {type === 'sms' && (
           <>
+            <p className="text-muted-foreground text-sm">
+              SMS is sent via system configuration (e.g. Twilio). Optionally set destination or from number.
+            </p>
             <FormField
               control={form.control}
-              name="accountSid"
+              name="to"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Account SID</FormLabel>
+                  <FormLabel>Send to (optional)</FormLabel>
                   <FormControl>
-                    <Input {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="authToken"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Auth token (leave blank to keep existing)</FormLabel>
-                  <FormControl>
-                    <Input type="password" {...field} />
+                    <Input placeholder="+1234567890" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -202,9 +145,9 @@ export function EditIntegrationForm({
               name="from"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>From number</FormLabel>
+                  <FormLabel>From number (optional override)</FormLabel>
                   <FormControl>
-                    <Input {...field} />
+                    <Input placeholder="+1234567890" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
