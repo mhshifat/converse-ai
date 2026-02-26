@@ -12,7 +12,7 @@ import {
   EmptyTitle,
   EmptyDescription,
 } from '@/components/ui/empty';
-import { MessageSquare, User, Send, Loader2 } from 'lucide-react';
+import { MessageSquare, User, Send, Loader2, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface LiveChatContentProps {
@@ -48,6 +48,15 @@ export function LiveChatContent({ projectId }: LiveChatContentProps = {}) {
       void utils.liveChat.getConversation.invalidate({ conversationId: selectedId! });
     },
   });
+  const endConversationMutation = trpc.liveChat.endConversation.useMutation({
+    onSuccess: (_, variables) => {
+      if (selectedId === variables.conversationId) {
+        setSelectedId(null);
+        setInput('');
+      }
+      void utils.liveChat.listHandoffConversations.invalidate();
+    },
+  });
 
   if (isLoading) {
     return <Skeleton className="h-64 w-full rounded-lg" />;
@@ -79,18 +88,34 @@ export function LiveChatContent({ projectId }: LiveChatContentProps = {}) {
                     <span className="font-medium truncate block">{c.chatbotName}</span>
                     <span className="text-muted-foreground text-xs">{c.messageCount} messages</span>
                   </button>
-                  <Button
-                    size="sm"
-                    className="mt-1 w-full"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      assignMutation.mutate({ conversationId: c.id });
-                      setSelectedId(c.id);
-                    }}
-                    disabled={assignMutation.isPending}
-                  >
-                    Take
-                  </Button>
+                  <div className="mt-1 flex gap-1">
+                    <Button
+                      size="sm"
+                      className="flex-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        assignMutation.mutate({ conversationId: c.id });
+                        setSelectedId(c.id);
+                      }}
+                      disabled={assignMutation.isPending}
+                    >
+                      Take
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="shrink-0 text-muted-foreground hover:text-destructive hover:border-destructive"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        endConversationMutation.mutate({ conversationId: c.id });
+                        if (selectedId === c.id) setSelectedId(null);
+                      }}
+                      disabled={endConversationMutation.isPending}
+                      aria-label="Close conversation"
+                    >
+                      <XCircle className="size-3.5" />
+                    </Button>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -137,16 +162,30 @@ export function LiveChatContent({ projectId }: LiveChatContentProps = {}) {
           </Empty>
         ) : (
           <>
-            <div className="p-3 border-b border-border/60 flex items-center gap-2">
-              <User className="size-4 text-muted-foreground" />
-              <span className="text-sm font-medium">{selected?.chatbotName}</span>
-              {!isAssigned && (
+            <div className="p-3 border-b border-border/60 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <User className="size-4 text-muted-foreground shrink-0" />
+                <span className="text-sm font-medium truncate">{selected?.chatbotName}</span>
+                {!isAssigned && (
+                  <Button
+                    size="sm"
+                    onClick={() => assignMutation.mutate({ conversationId: selectedId })}
+                    disabled={assignMutation.isPending}
+                  >
+                    Take
+                  </Button>
+                )}
+              </div>
+              {isAssigned && (
                 <Button
                   size="sm"
-                  onClick={() => assignMutation.mutate({ conversationId: selectedId })}
-                  disabled={assignMutation.isPending}
+                  variant="outline"
+                  className="shrink-0 gap-1.5 text-muted-foreground hover:text-destructive hover:border-destructive"
+                  onClick={() => endConversationMutation.mutate({ conversationId: selectedId })}
+                  disabled={endConversationMutation.isPending}
                 >
-                  Take
+                  <XCircle className="size-3.5" />
+                  Close
                 </Button>
               )}
             </div>
@@ -182,28 +221,40 @@ export function LiveChatContent({ projectId }: LiveChatContentProps = {}) {
               )}
             </div>
             {isAssigned && (
-              <div className="p-3 border-t border-border/60 flex gap-2">
-                <Input
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder="Type a reply..."
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      if (input.trim()) {
-                        sendMutation.mutate({ conversationId: selectedId, content: input.trim() });
+              <div className="p-3 border-t border-border/60 flex flex-col gap-2">
+                <div className="flex gap-2">
+                  <Input
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    placeholder="Type a reply..."
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (input.trim()) {
+                          sendMutation.mutate({ conversationId: selectedId, content: input.trim() });
+                        }
                       }
-                    }
-                  }}
-                />
+                    }}
+                  />
+                  <Button
+                    onClick={() => {
+                      if (input.trim())
+                        sendMutation.mutate({ conversationId: selectedId, content: input.trim() });
+                    }}
+                    disabled={!input.trim() || sendMutation.isPending}
+                  >
+                    {sendMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+                  </Button>
+                </div>
                 <Button
-                  onClick={() => {
-                    if (input.trim())
-                      sendMutation.mutate({ conversationId: selectedId, content: input.trim() });
-                  }}
-                  disabled={!input.trim() || sendMutation.isPending}
+                  size="sm"
+                  variant="ghost"
+                  className="w-fit text-muted-foreground hover:text-destructive"
+                  onClick={() => endConversationMutation.mutate({ conversationId: selectedId })}
+                  disabled={endConversationMutation.isPending}
                 >
-                  {sendMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+                  <XCircle className="size-3.5 mr-1" />
+                  Close conversation
                 </Button>
               </div>
             )}

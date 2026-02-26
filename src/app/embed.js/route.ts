@@ -48,6 +48,7 @@ const EMBED_SCRIPT = `
   var panel = null;
   var listEl = null;
   var handoffMode = false;
+  var conversationEnded = false;
   var pollIntervalId = null;
   function startHandoffPolling() {
     if (pollIntervalId) return;
@@ -200,6 +201,15 @@ const EMBED_SCRIPT = `
         if (conversationId) {
           trpcMutate('widget.endConversation', { conversationId: conversationId }).catch(function(){});
         }
+        conversationId = null;
+        conversationEnded = false;
+        messages = [];
+        if (input) input.disabled = false;
+        if (sendBtn) sendBtn.disabled = false;
+        if (listEl) {
+          var m = config.messages || {};
+          listEl.innerHTML = '<div style="display:flex;align-items:flex-start;gap:8px;color:' + (m.welcomeTextColor || '#666') + ';font-size:' + (m.fontSize || 14) + 'px;"><span style="margin-top:2px;flex-shrink:0;width:24px;height:24px;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.06);border-radius:50%;font-size:12px">✦</span><span style="line-height:1.4">' + (config.welcomeMessage || 'How can I help?') + '</span></div>';
+        }
       };
       header.appendChild(closeBtn);
     }
@@ -245,19 +255,48 @@ const EMBED_SCRIPT = `
     sendBtn.onmouseleave = function() { sendBtn.style.opacity = '1'; sendBtn.style.transform = 'scale(1)'; };
     sendBtn.onmousedown = function() { sendBtn.style.transform = 'scale(0.95)'; };
     sendBtn.onmouseup = function() { sendBtn.style.transform = 'scale(1.05)'; };
+    function showConversationEnded() {
+      conversationEnded = true;
+      conversationId = null;
+      stopHandoffPolling();
+      if (listEl) {
+        var endedRow = document.createElement('div');
+        endedRow.style.cssText = 'padding:12px 16px;border-radius:8px;background:rgba(0,0,0,.06);font-size:13px;color:#555;text-align:center;';
+        endedRow.textContent = 'This conversation has ended. Close and open the chat again to start a new conversation.';
+        listEl.appendChild(endedRow);
+        listEl.scrollTop = listEl.scrollHeight;
+      }
+      if (input) input.disabled = true;
+      if (sendBtn) sendBtn.disabled = true;
+    }
     function send() {
+      if (conversationEnded) return;
       var text = (input.value || '').trim();
-      if (!text || !conversationId) return;
+      if (!text) return;
       input.value = '';
       appendMsg('customer', text);
-      trpcMutate('widget.sendMessage', { conversationId: conversationId, content: text }).then(function(res) {
-        var result = res && res.result && res.result.data && res.result.data.json;
-        if (result && result.response) appendMsg('agent', result.response);
-        if (result && result.handoffRequested) {
-          handoffMode = true;
-          startHandoffPolling();
-        }
-      });
+      if (conversationId) {
+        trpcMutate('widget.sendMessage', { conversationId: conversationId, content: text }).then(function(res) {
+          var result = res && res.result && res.result.data && res.result.data.json;
+          if (result && result.response) appendMsg('agent', result.response);
+          if (result && result.handoffRequested) {
+            handoffMode = true;
+            startHandoffPolling();
+          }
+          if (result && result.conversationEnded) showConversationEnded();
+        });
+      } else {
+        trpcMutate('widget.sendFirstMessage', { apiKey: apiKey, customerId: customerId, channel: 'text', content: text }).then(function(res) {
+          var result = res && res.result && res.result.data && res.result.data.json;
+          if (result && result.conversationId) conversationId = result.conversationId;
+          if (result && result.response) appendMsg('agent', result.response);
+          if (result && result.handoffRequested) {
+            handoffMode = true;
+            startHandoffPolling();
+          }
+          if (result && result.conversationEnded) showConversationEnded();
+        });
+      }
     }
     input.onkeydown = function(e) { if (e.key === 'Enter') send(); };
     sendBtn.onclick = send;
@@ -285,12 +324,7 @@ const EMBED_SCRIPT = `
     } else {
       messages.forEach(function(msg) { appendMsg(msg.sender, msg.content, true); });
     }
-    if (!conversationId) {
-      trpcMutate('widget.startConversation', { apiKey: apiKey, customerId: customerId, channel: 'text' }).then(function(res) {
-        var data = res && res.result && res.result.data && res.result.data.json;
-        if (data && data.id) { conversationId = data.id; }
-      });
-    } else {
+    if (conversationId) {
       trpcQuery('widget.getMessages', { conversationId: conversationId }).then(function(res) {
         var data = res && res.result && res.result.data && res.result.data.json;
         if (data && (data.handoffRequested || data.assignedHumanAgentId)) { handoffMode = true; startHandoffPolling(); }

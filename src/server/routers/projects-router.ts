@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { router, protectedProcedure } from '@/server/trpc';
 import { withCorrelationError, throwNotFoundWithId } from '@/server/trpc-error';
 import * as projectRepo from '../repositories/project-repository';
+import * as conversationService from '../services/conversation-service';
 
 export const projectsRouter = router({
   list: protectedProcedure
@@ -82,6 +83,23 @@ export const projectsRouter = router({
         const deleted = await projectRepo.deleteProject(input.id, ctx.user.tenantId);
         if (!deleted) throwNotFoundWithId(correlationId, 'Project not found');
         return { success: true };
+      });
+    }),
+
+  sendTestDelivery: protectedProcedure
+    .input(z.object({ projectId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      return withCorrelationError('projects.sendTestDelivery', async (correlationId) => {
+        const result = await conversationService.sendTestDelivery(
+          input.projectId,
+          ctx.user.tenantId
+        );
+        if (!result.success) {
+          const err = new Error(result.error);
+          (err as Error & { correlationId?: string }).correlationId = correlationId;
+          throw err;
+        }
+        return { success: true, sentTo: result.sentTo };
       });
     }),
 });

@@ -160,7 +160,7 @@ export function PlaygroundContent({ projectId }: PlaygroundContentProps) {
           </div>
 
           {/* Compiled data */}
-          <div className="rounded-xl border border-border/50 bg-card p-5 shadow-sm">
+          <div className="min-w-0 rounded-xl border border-border/50 bg-card p-5 shadow-sm">
             <div className="mb-3 flex items-center gap-2">
               <Bot className="size-4 text-muted-foreground" />
               <h3 className="text-sm font-semibold text-foreground">Compiled data</h3>
@@ -168,7 +168,7 @@ export function PlaygroundContent({ projectId }: PlaygroundContentProps) {
                 Extracted when conversation ended — delivered to configured integrations
               </span>
             </div>
-            <pre className="max-h-[200px] overflow-auto rounded-lg border border-border/40 bg-muted/20 p-3 text-xs font-mono text-foreground">
+            <pre className="min-w-0 max-h-[200px] overflow-auto rounded-lg border border-border/40 bg-muted/20 p-3 text-xs font-mono text-foreground whitespace-pre-wrap break-words">
               {JSON.stringify(endedData.compiledData, null, 2)}
             </pre>
           </div>

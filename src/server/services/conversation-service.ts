@@ -18,21 +18,27 @@ function buildDataCollectionInstruction(schema: Record<string, unknown>): string
   const optional = allKeys.filter((k) => !required.includes(k));
   if (required.length === 0 && optional.length === 0) return '';
   const lines: string[] = [
-    '\n\n--- DATA TO COLLECT (from conversation) ---',
-    'When relevant, collect the following from the customer. Use their answers to fill these fields mentally; you do not need to output the fields, just remember and use them in your replies.',
+    '\n\n--- DATA TO COLLECT (mandatory for bookings/appointments) ---',
+    'You MUST collect the following from the customer. For any booking or appointment, explicitly ask for each required field that you do not yet have. Do not confirm the booking or say "is there anything else?" until every required field has been provided.',
+    '',
   ];
   if (required.length > 0) {
     lines.push(
-      `Required (you MUST collect these before closing the conversation or saying you are done; keep asking until the customer provides them): ${required.join(', ')}.`
+      `REQUIRED (must have all before closing or confirming): ${required.join(', ')}.`
     );
+    lines.push(
+      `For each missing required field, ask clearly (e.g. "May I have your name?", "What is your phone number?", "What email should we use?"). Do not skip any required field. A booking is only successful when you have: ${required.join(', ')}.`
+    );
+    lines.push('');
   }
   if (optional.length > 0) {
     lines.push(
-      `Optional (ask once if natural; if the customer does not want to provide, ignores, or says "skip", leave empty and move on): ${optional.join(', ')}.`
+      `Optional (ask once if natural; if the customer declines or says "skip", move on): ${optional.join(', ')}.`
     );
+    lines.push('');
   }
   lines.push(
-    'Do not suggest closing the conversation or say "is there anything else" until all required fields above have been collected. For optional fields, do not insist—if the customer declines or does not answer, continue without them.'
+    'Rule: Do not say the booking is confirmed, do not ask "anything else?", and do not use __END_CONVERSATION__ until you have collected every required field listed above.'
   );
   lines.push('---\n');
   return lines.join('\n');
@@ -94,6 +100,131 @@ export async function startConversation(
   };
 }
 
+/**
+ * Creates a conversation and the first customer message in one go. Use this instead of
+ * startConversation + sendMessage for the first message so we never persist 0-message conversations.
+ */
+export async function sendFirstMessage(
+  apiKey: string,
+  customerId: string,
+  channel: 'text' | 'call',
+  content: string
+): Promise<{ conversationId: string; response: string | null; handoffRequested: boolean } | null> {
+  const chatbot = await getChatbotByApiKey(apiKey);
+  if (!chatbot) return null;
+
+  const tenantId = chatbot.project.tenant_id;
+  const projectId = chatbot.project.id;
+  let agentId = await getDefaultAgentForProject(projectId, channel);
+  if (!agentId) agentId = await assignAgent(tenantId);
+  if (!agentId) return null;
+
+  const conversationMode = (chatbot.project.conversation_mode as string) ?? 'both';
+  const conversation = await prisma.conversation.create({
+    data: {
+      chatbot_id: chatbot.id,
+      customer_id: customerId,
+      agent_id: agentId,
+      channel,
+      status: 'active',
+      ...(conversationMode === 'human_only' && { handoff_requested_at: new Date() }),
+    },
+  });
+  const conversationId = conversation.id;
+
+  await prisma.message.create({
+    data: {
+      conversation_id: conversationId,
+      sender_type: 'customer',
+      sender_id: customerId,
+      content,
+    },
+  });
+
+  const humanOnlyMode = conversationMode === 'human_only';
+  if (humanOnlyMode) {
+    return { conversationId, response: null, handoffRequested: true };
+  }
+
+  const conversationWithAgent = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    include: { agent: true, chatbot: { include: { project: true } } },
+  });
+  if (!conversationWithAgent) return { conversationId, response: null, handoffRequested: false };
+
+  const agentSettings = (conversationWithAgent.agent.settings ?? {}) as Record<string, unknown>;
+  const providerType = (agentSettings.provider as 'groq' | 'openai') ?? 'groq';
+  const providerApiKey = agentSettings.apiKey as string | undefined;
+  const provider = AgentProviderFactory.getProvider(providerType, { apiKey: providerApiKey });
+  const messages = await prisma.message.findMany({
+    where: { conversation_id: conversationId },
+    orderBy: { created_at: 'asc' },
+  });
+  const history = messages.map((m) => ({
+    role: m.sender_type === 'customer' ? 'user' : 'assistant',
+    content: m.content,
+  }));
+  const knowledgeContext = await buildContextForProject(projectId);
+  const dataSchema = (conversationWithAgent.chatbot.project.data_schema ?? {}) as Record<string, unknown>;
+  const dataCollectionInstruction = buildDataCollectionInstruction(dataSchema);
+  const aiOnlyMode = conversationMode === 'ai_only';
+  const handoffInstruction = aiOnlyMode
+    ? ''
+    : '\n\nOnly when the customer explicitly asks to speak with a human agent, a real person, or to be transferred to support (e.g. "I want to talk to a person", "connect me to an agent", "I need human help"), or when they have a complaint or escalation you cannot resolve, end your reply with exactly: __HANDOFF__. Do NOT use __HANDOFF__ when the customer is simply closing the conversation (e.g. "no thanks", "that\'s all", "nothing else", "I\'m good", "no that\'s all")—reply with a short closing (e.g. "Glad I could help. Take care!") and do not add __HANDOFF__. Only use __END_CONVERSATION__ when you are saying a final goodbye (e.g. "Glad I could help. Take care!") after the customer has already said they are done (e.g. "no thanks", "that\'s all", "nothing else"). Do NOT use __END_CONVERSATION__ when you are asking the customer a question like "Is there anything else I can help you with?" or "Anything else?"—wait for their answer first; only close the conversation in your next reply if they decline.';
+  const systemPromptWithKnowledge =
+    conversationWithAgent.agent.system_prompt +
+    (knowledgeContext ? knowledgeContext : '') +
+    (dataCollectionInstruction ? dataCollectionInstruction : '') +
+    handoffInstruction;
+  let { response } = await provider.sendMessage({
+    prompt: content,
+    conversationId,
+    agentId: conversationWithAgent.agent_id,
+    context: {
+      history,
+      systemPrompt: systemPromptWithKnowledge,
+      model: agentSettings.model,
+    },
+  });
+
+  let handoffRequested = false;
+  if (!aiOnlyMode && response.includes('__HANDOFF__')) {
+    await requestHumanHandoff(conversationId);
+    response = "I'm connecting you with a human agent who can help.";
+    handoffRequested = true;
+  }
+  let conversationEnded = false;
+  if (response.includes('__END_CONVERSATION__')) {
+    response = response.replace(/\n?__END_CONVERSATION__\n?/g, '').trim() || response;
+    conversationEnded = true;
+  }
+
+  await prisma.message.create({
+    data: {
+      conversation_id: conversationId,
+      sender_type: 'agent',
+      sender_id: conversationWithAgent.agent_id,
+      content: response,
+    },
+  });
+  let compiledData: Record<string, unknown> = {};
+  let endedMessages: { role: 'customer' | 'agent' | 'human_agent'; content: string }[] = [];
+  if (conversationEnded) {
+    const endResult = await endConversation(conversationId);
+    if (endResult) {
+      compiledData = endResult.compiledData ?? {};
+      endedMessages = endResult.messages ?? [];
+    }
+  }
+  return {
+    conversationId,
+    response,
+    handoffRequested,
+    conversationEnded,
+    ...(conversationEnded ? { compiledData, messages: endedMessages } : {}),
+  };
+}
+
 export async function sendMessage(
   conversationId: string,
   content: string,
@@ -146,7 +277,7 @@ export async function sendMessage(
     const dataCollectionInstruction = buildDataCollectionInstruction(dataSchema);
     const handoffInstruction = aiOnlyMode
       ? ''
-      : '\n\nOnly when the customer explicitly asks to speak with a human agent, a real person, or to be transferred to support (e.g. "I want to talk to a person", "connect me to an agent", "I need human help"), or when they have a complaint or escalation you cannot resolve, end your reply with exactly: __HANDOFF__. Do NOT use __HANDOFF__ when the customer is simply closing the conversation (e.g. "no thanks", "that\'s all", "nothing else", "I\'m good", "no that\'s all")—reply with a short closing (e.g. "Glad I could help. Take care!") and do not add __HANDOFF__.';
+      : '\n\nOnly when the customer explicitly asks to speak with a human agent, a real person, or to be transferred to support (e.g. "I want to talk to a person", "connect me to an agent", "I need human help"), or when they have a complaint or escalation you cannot resolve, end your reply with exactly: __HANDOFF__. Do NOT use __HANDOFF__ when the customer is simply closing the conversation (e.g. "no thanks", "that\'s all", "nothing else", "I\'m good", "no that\'s all")—reply with a short closing (e.g. "Glad I could help. Take care!") and do not add __HANDOFF__. Only use __END_CONVERSATION__ when you are saying a final goodbye (e.g. "Glad I could help. Take care!") after the customer has already said they are done (e.g. "no thanks", "that\'s all", "nothing else"). Do NOT use __END_CONVERSATION__ when you are asking the customer a question like "Is there anything else I can help you with?" or "Anything else?"—wait for their answer first; only close the conversation in your next reply if they decline.';
     const systemPromptWithKnowledge =
       conversation.agent.system_prompt +
       (knowledgeContext
@@ -171,6 +302,11 @@ export async function sendMessage(
       response = "I'm connecting you with a human agent who can help.";
       handoffRequested = true;
     }
+    let conversationEnded = false;
+    if (response.includes('__END_CONVERSATION__')) {
+      response = response.replace(/\n?__END_CONVERSATION__\n?/g, '').trim() || response;
+      conversationEnded = true;
+    }
 
     await prisma.message.create({
       data: {
@@ -180,19 +316,37 @@ export async function sendMessage(
         content: response,
       },
     });
-    return { response, handoffRequested };
+    let compiledData: Record<string, unknown> = {};
+    let endedMessages: { role: 'customer' | 'agent' | 'human_agent'; content: string }[] = [];
+    if (conversationEnded) {
+      const endResult = await endConversation(conversationId);
+      if (endResult) {
+        compiledData = endResult.compiledData ?? {};
+        endedMessages = endResult.messages ?? [];
+      }
+    }
+    return {
+      response,
+      handoffRequested,
+      conversationEnded,
+      ...(conversationEnded ? { compiledData, messages: endedMessages } : {}),
+    };
   }
 
   if (senderType === 'customer' && humanOnlyMode) {
-    return { response: null, handoffRequested: true };
+    return { response: null, handoffRequested: true, conversationEnded: false };
   }
-  return { response: null, handoffRequested: false };
+  return { response: null, handoffRequested: false, conversationEnded: false };
 }
 
 export async function endConversation(conversationId: string) {
   const conversation = await prisma.conversation.findUnique({
     where: { id: conversationId },
-    include: { chatbot: { include: { project: true } }, messages: true },
+    include: {
+      chatbot: { include: { project: true } },
+      messages: true,
+      agent: true,
+    },
   });
   if (!conversation || conversation.status !== 'active') return null;
 
@@ -202,11 +356,33 @@ export async function endConversation(conversationId: string) {
   });
 
   const project = conversation.chatbot.project;
+  const schema = (project.data_schema ?? {}) as Record<string, unknown>;
   const deliveryIds = (project.delivery_integration_ids ?? []) as string[];
-  const compiledData = compileDataFromMessages(
+  if (deliveryIds.length === 0) {
+    console.warn(
+      '[ConverseAI] Conversation ended but no delivery integrations are enabled for this project. To receive compiled data (e.g. by email), enable one in Project → Integrations → Delivery integrations and save.'
+    );
+  }
+
+  let compiledData: Record<string, unknown>;
+  const llmExtracted = await extractDataWithLLM(
     conversation.messages,
-    (project.data_schema ?? {}) as Record<string, unknown>
+    schema,
+    conversation.agent
   );
+  if (llmExtracted) {
+    const customerText = conversation.messages
+      .filter((m) => m.sender_type === 'customer')
+      .map((m) => m.content)
+      .join('\n');
+    compiledData = {
+      ...llmExtracted,
+      summary: customerText.slice(0, 500),
+      messageCount: conversation.messages.length,
+    };
+  } else {
+    compiledData = compileDataFromMessages(conversation.messages, schema);
+  }
 
   if (Object.keys(compiledData).length > 0) {
     await prisma.conversation.update({
@@ -219,30 +395,223 @@ export async function endConversation(conversationId: string) {
     const integrations = await prisma.integration.findMany({
       where: { id: { in: deliveryIds }, tenant_id: project.tenant_id },
     });
+    const fallbackEmail =
+      (await prisma.user.findFirst({
+        where: { tenant_id: project.tenant_id },
+        select: { email: true },
+        orderBy: { created_at: 'asc' },
+      }))?.email ?? null;
     for (const integration of integrations) {
-      await deliverCompiledData(
-        integration.type,
-        integration.config as Record<string, unknown>,
-        compiledData
-      );
+      try {
+        await deliverCompiledData(
+          integration.type,
+          integration.config as Record<string, unknown>,
+          compiledData,
+          { fallbackEmail }
+        );
+      } catch (err) {
+        console.error(
+          `[ConverseAI] Delivery failed for integration ${integration.id} (${integration.type}):`,
+          err instanceof Error ? err.message : err
+        );
+      }
     }
   }
 
-  return { success: true, compiledData };
+  const messages = conversation.messages.map((m) => ({
+    role: (m.sender_type === 'customer' ? 'customer' : m.sender_type === 'human_agent' ? 'human_agent' : 'agent') as 'customer' | 'agent' | 'human_agent',
+    content: m.content,
+  }));
+  return { success: true, compiledData, messages };
 }
+
+/** Sample payload for test delivery. */
+const TEST_DELIVERY_DATA: Record<string, unknown> = {
+  summary: 'Test message from ConverseAI. If you received this, your delivery integration is working.',
+  messageCount: 0,
+  name: 'Test User',
+  email: 'test@example.com',
+  phone: '',
+};
+
+/**
+ * Send a test payload to all delivery integrations enabled for the project.
+ * Used so users can verify email/Discord/SMS before relying on real conversation data.
+ */
+export async function sendTestDelivery(
+  projectId: string,
+  tenantId: string
+): Promise<{ success: true; sentTo: number } | { success: false; error: string }> {
+  const project = await prisma.project.findFirst({
+    where: { id: projectId, tenant_id: tenantId },
+    select: { delivery_integration_ids: true, tenant_id: true },
+  });
+  if (!project) return { success: false, error: 'Project not found.' };
+  const deliveryIds = (project.delivery_integration_ids ?? []) as string[];
+  if (deliveryIds.length === 0) {
+    return {
+      success: false,
+      error: 'No delivery integrations enabled. Select at least one above and save, then try again.',
+    };
+  }
+  const integrations = await prisma.integration.findMany({
+    where: { id: { in: deliveryIds }, tenant_id: project.tenant_id },
+  });
+  const fallbackEmail =
+    (await prisma.user.findFirst({
+      where: { tenant_id: project.tenant_id },
+      select: { email: true },
+      orderBy: { created_at: 'asc' },
+    }))?.email ?? null;
+  let sentTo = 0;
+  const errors: string[] = [];
+  for (const integration of integrations) {
+    try {
+      await deliverCompiledData(
+        integration.type,
+        integration.config as Record<string, unknown>,
+        TEST_DELIVERY_DATA,
+        { fallbackEmail }
+      );
+      sentTo++;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      errors.push(`${integration.type}: ${msg}`);
+      console.error(
+        `[ConverseAI] Test delivery failed for integration ${integration.id} (${integration.type}):`,
+        msg
+      );
+    }
+  }
+  if (sentTo === 0 && errors.length > 0) {
+    return { success: false, error: errors[0] ?? 'Delivery failed.' };
+  }
+  return { success: true, sentTo };
+}
+
+/**
+ * LLM-based extraction: ask the agent's provider to extract schema fields from the conversation.
+ * Returns a plain object with schema keys, or null on failure (parse error, API error).
+ */
+async function extractDataWithLLM(
+  messages: { sender_type: string; content: string }[],
+  schema: Record<string, unknown>,
+  agent: { settings?: unknown }
+): Promise<Record<string, unknown> | null> {
+  const props = schema.properties as Record<string, unknown> | undefined;
+  if (!props || typeof props !== 'object' || Object.keys(props).length === 0) return null;
+
+  const keys = Object.keys(props);
+  const required = (schema.required as string[] | undefined) ?? [];
+  const agentSettings = (agent.settings ?? {}) as Record<string, unknown>;
+  const providerType = (agentSettings.provider as 'groq' | 'openai') ?? 'groq';
+  const providerApiKey = agentSettings.apiKey as string | undefined;
+  const model = agentSettings.model as string | undefined;
+
+  const provider = AgentProviderFactory.getProvider(providerType, { apiKey: providerApiKey });
+  const transcript = messages
+    .map((m) => `${m.sender_type === 'customer' ? 'Customer' : 'Agent'}: ${m.content}`)
+    .join('\n\n');
+  const systemPrompt = `You are a data extractor. Extract the following fields from the conversation and return ONLY a valid JSON object. Use these exact keys: ${keys.join(', ')}. Required keys (must be present, use "" if not found): ${required.join(', ')}. Optional keys: omit the key if not found. Use only information explicitly stated in the conversation. Return nothing but the JSON object, no markdown, no explanation.`;
+  const userPrompt = `Conversation:\n\n${transcript.slice(0, 6000)}\n\nExtract and return the JSON object.`;
+
+  try {
+    const { response } = await provider.sendMessage({
+      prompt: userPrompt,
+      conversationId: '',
+      agentId: '',
+      context: {
+        history: [],
+        systemPrompt,
+        model,
+      },
+    });
+    const trimmed = response.trim();
+    const jsonStr = trimmed.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+    const parsed = JSON.parse(jsonStr) as Record<string, unknown>;
+    if (typeof parsed !== 'object' || parsed === null) return null;
+    const result: Record<string, unknown> = {};
+    for (const key of keys) {
+      if (key in parsed) result[key] = parsed[key];
+      else if (required.includes(key)) result[key] = '';
+    }
+    return result;
+  } catch (err) {
+    console.warn('[ConverseAI] LLM extraction failed, using heuristic:', err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
+/** Common email regex */
+const EMAIL_REGEX =
+  /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+/** Phone: digits, optional +, spaces/dashes, at least 10 digits */
+const PHONE_REGEX =
+  /\+?[\d\s\-()]{10,}/g;
+/** Extract integer (e.g. age) */
+const INTEGER_REGEX = /\b(\d{1,3})\b/g;
 
 function compileDataFromMessages(
   messages: { sender_type: string; content: string }[],
-  _schema: Record<string, unknown>
+  schema: Record<string, unknown>
 ): Record<string, unknown> {
-  const customerMessages = messages
+  const fullText = messages.map((m) => m.content).join('\n');
+  const customerText = messages
     .filter((m) => m.sender_type === 'customer')
     .map((m) => m.content)
     .join('\n');
-  return {
-    summary: customerMessages.slice(0, 500),
+  const props = (schema.properties as Record<string, unknown>) ?? {};
+  const required = (schema.required as string[] | undefined) ?? [];
+  const result: Record<string, unknown> = {
     messageCount: messages.length,
   };
+
+  for (const key of Object.keys(props)) {
+    const keyLower = key.toLowerCase();
+    let value: string | number | undefined;
+
+    if (keyLower === 'email') {
+      const match = fullText.match(EMAIL_REGEX);
+      value = match?.[0] ?? undefined;
+    } else if (keyLower === 'phone') {
+      const matches = fullText.match(PHONE_REGEX);
+      const cleaned = matches?.map((s) => s.replace(/\D/g, '').trim()).filter((s) => s.length >= 10);
+      value = cleaned?.[0] ?? undefined;
+    } else if (keyLower === 'age') {
+      const match = fullText.match(INTEGER_REGEX);
+      const ages = match?.map(Number).filter((n) => n >= 1 && n <= 120) ?? [];
+      value = ages.length > 0 ? ages[0] : undefined;
+    } else if (keyLower === 'dob' || keyLower === 'dateofbirth') {
+      const dateLike =
+        /(\d{4}-\d{2}-\d{2})|(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})|(\w+\s+\d{1,2},?\s+\d{4})/;
+      const m = fullText.match(dateLike);
+      value = m?.[0] ?? undefined;
+    } else if (keyLower === 'name') {
+      const lines = fullText.split(/\n+/).map((s) => s.trim()).filter(Boolean);
+      const nameLike = /^[A-Za-z\s\-']{2,50}$/;
+      for (const line of lines) {
+        if (
+          line.length >= 3 &&
+          nameLike.test(line) &&
+          !EMAIL_REGEX.test(line) &&
+          !PHONE_REGEX.test(line)
+        ) {
+          value = line;
+          break;
+        }
+      }
+      if (value === undefined && lines.length > 0) value = lines[0];
+    } else {
+      const lines = fullText.split(/\n+/).map((s) => s.trim()).filter(Boolean);
+      value = lines.find((line) => line.length <= 200) ?? undefined;
+    }
+
+    if (value !== undefined) result[key] = value;
+    else if (required.includes(key)) result[key] = '';
+  }
+
+  result.summary = customerText.slice(0, 500);
+  return result;
 }
 
 function escapeHtml(s: string): string {
@@ -256,7 +625,8 @@ function escapeHtml(s: string): string {
 async function deliverCompiledData(
   type: string,
   config: Record<string, unknown>,
-  data: Record<string, unknown>
+  data: Record<string, unknown>,
+  options?: { fallbackEmail?: string | null }
 ): Promise<void> {
   if (type === 'discord' && typeof config.webhookUrl === 'string') {
     await fetch(config.webhookUrl, {
@@ -269,8 +639,17 @@ async function deliverCompiledData(
     return;
   }
   if (type === 'email') {
-    const to = (config.to as string) ?? process.env.DELIVERY_EMAIL_TO;
-    if (!to) return;
+    const to =
+      (config.to as string) ??
+      process.env.DELIVERY_EMAIL_TO ??
+      options?.fallbackEmail ??
+      null;
+    if (!to) {
+      console.warn(
+        '[ConverseAI] Email delivery skipped: no recipient. Set "to" on the email integration, DELIVERY_EMAIL_TO in server env, or ensure a user exists in this tenant.'
+      );
+      return;
+    }
     const body = JSON.stringify(data, null, 2);
     await getEmailSender().send({
       to,
@@ -344,6 +723,7 @@ export async function listHandoffConversationsForHuman(
     prisma.conversation.findMany({
       where: {
         status: 'active',
+        ended_at: null,
         handoff_requested_at: { not: null },
         assigned_human_agent_id: null,
         chatbot: { project: { is: projectWhere } },
@@ -358,6 +738,7 @@ export async function listHandoffConversationsForHuman(
     prisma.conversation.findMany({
       where: {
         status: 'active',
+        ended_at: null,
         assigned_human_agent_id: userId,
         chatbot: { project: { is: projectWhere } },
       },

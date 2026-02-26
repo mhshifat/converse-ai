@@ -195,7 +195,7 @@ function PropertyRow({
             value={node.required === true ? 'required' : 'optional'}
             onValueChange={(v) => onNodeChange({ ...node, required: v === 'required' })}
           >
-            <SelectTrigger className="h-8 w-[100px]" size="sm">
+            <SelectTrigger className="h-8 w-auto" size="sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

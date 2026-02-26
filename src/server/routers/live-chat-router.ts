@@ -76,4 +76,27 @@ export const liveChatRouter = router({
         return conversation;
       });
     }),
+
+  endConversation: protectedProcedure
+    .input(z.object({ conversationId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      return withCorrelationError('liveChat.endConversation', async (correlationId) => {
+        const isHuman = await humanAgentRepo.isHumanAgent(ctx.user.id, ctx.user.tenantId);
+        if (!isHuman) throw new Error('You are not a human agent');
+        const conversation = await conversationRepo.getConversationById(
+          input.conversationId,
+          ctx.user.tenantId
+        );
+        if (!conversation) throwNotFoundWithId(correlationId, 'Conversation not found');
+        const isAssignedToMe = conversation.assignedHumanAgentId === ctx.user.id;
+        const isUnassigned = conversation.handoffRequestedAt && !conversation.assignedHumanAgentId;
+        if (!isAssignedToMe && !isUnassigned)
+          throw new Error('You can only close conversations assigned to you or waiting for an agent');
+        if (conversation.status === 'closed')
+          throw new Error('Conversation is already closed');
+        const result = await conversationService.endConversation(input.conversationId);
+        if (!result) throwNotFoundWithId(correlationId, 'Conversation not found');
+        return result;
+      });
+    }),
 });

@@ -55,8 +55,9 @@ export class GroqAgentProvider implements AgentProvider {
 
     if (!res.ok) {
       const err = await res.text();
+      console.error(`[Groq] API error ${res.status}:`, err);
       return {
-        response: `Sorry, I had trouble responding. (${res.status}: ${err.slice(0, 100)})`,
+        response: 'Sorry, I had trouble responding.',
       };
     }
 

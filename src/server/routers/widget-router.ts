@@ -39,6 +39,28 @@ export const widgetRouter = router({
       });
     }),
 
+  sendFirstMessage: publicProcedure
+    .input(
+      z.object({
+        apiKey: z.string().min(1),
+        customerId: z.string().min(1),
+        channel: z.enum(['text', 'call']),
+        content: z.string().min(1),
+      })
+    )
+    .mutation(async ({ input }) => {
+      return withCorrelationError('widget.sendFirstMessage', async (correlationId) => {
+        const result = await conversationService.sendFirstMessage(
+          input.apiKey,
+          input.customerId,
+          input.channel,
+          input.content
+        );
+        if (!result) throwNotFoundWithId(correlationId, 'Invalid API key or no agent available');
+        return result;
+      });
+    }),
+
   sendMessage: publicProcedure
     .input(
       z.object({

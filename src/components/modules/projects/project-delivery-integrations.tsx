@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { toast } from 'sonner';
 import { trpc } from '@/utils/trpc';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -14,7 +15,7 @@ import {
   EmptyDescription,
   EmptyContent,
 } from '@/components/ui/empty';
-import { Plug, Mail, MessageCircle, Phone, ExternalLink } from 'lucide-react';
+import { Plug, Mail, MessageCircle, Phone, ExternalLink, Send } from 'lucide-react';
 
 const typeLabel: Record<string, string> = {
   email: 'Email',
@@ -51,6 +52,19 @@ export function ProjectDeliveryIntegrations({
       void utils.projects.getById.invalidate({ id: projectId });
     },
     onError: (err) => setServerError(err.message),
+  });
+
+  const sendTestDelivery = trpc.projects.sendTestDelivery.useMutation({
+    onSuccess: (data) => {
+      toast.success(
+        data.sentTo > 0
+          ? `Test sent to ${data.sentTo} integration(s). Check your email, Discord, or SMS.`
+          : 'Test delivery completed.'
+      );
+    },
+    onError: (err) => {
+      toast.error(err.message ?? 'Test delivery failed.');
+    },
   });
 
   const handleSave = () => {
@@ -93,6 +107,11 @@ export function ProjectDeliveryIntegrations({
             When a conversation ends, compiled data (summary, extracted fields) can be sent to
             these integrations. Add Discord webhooks, email, SMS, or other endpoints from your
             account, then enable them for this project below.
+          </p>
+          <p className="text-muted-foreground text-xs mt-2 rounded-md bg-muted/50 p-2">
+            <strong>Email:</strong> Create an Email integration, enable it here, and set a recipient
+            (&quot;To&quot; in the integration or <code className="text-[11px]">DELIVERY_EMAIL_TO</code> in server env).
+            Configure SMTP with <code className="text-[11px]">SYSTEM_SMTP_HOST</code> / <code className="text-[11px]">SYSTEM_SMTP_PORT</code> (and user/password if required).
           </p>
         </div>
 
@@ -166,12 +185,31 @@ export function ProjectDeliveryIntegrations({
                 </div>
               ))}
             </div>
-            <Button
-              onClick={handleSave}
-              disabled={updateProject.isPending || selectedIds.join() === deliveryIntegrationIds.join()}
-            >
-              {updateProject.isPending ? 'Saving…' : 'Save delivery settings'}
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                onClick={handleSave}
+                disabled={updateProject.isPending || selectedIds.join() === deliveryIntegrationIds.join()}
+              >
+                {updateProject.isPending ? 'Saving…' : 'Save delivery settings'}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => sendTestDelivery.mutate({ projectId })}
+                disabled={
+                  sendTestDelivery.isPending ||
+                  deliveryIntegrationIds.length === 0
+                }
+              >
+                <Send className="size-4 mr-2" />
+                {sendTestDelivery.isPending ? 'Sending…' : 'Send test'}
+              </Button>
+            </div>
+            {deliveryIntegrationIds.length === 0 && (
+              <p className="text-muted-foreground text-xs">
+                Save delivery settings first, then use Send test to verify email/Discord/SMS.
+              </p>
+            )}
           </>
         )}
       </div>

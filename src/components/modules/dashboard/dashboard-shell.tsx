@@ -145,11 +145,11 @@ export function DashboardShell({ userEmail, children }: DashboardShellProps) {
   const projectSubNav = projectId
     ? [
         { href: `/projects/${projectId}`, label: 'Overview', icon: Home },
+        { href: `/projects/${projectId}/conversations`, label: 'Conversations', icon: MessageSquare },
+        { href: `/projects/${projectId}/playground`, label: 'Playground', icon: Play },
         { href: `/projects/${projectId}/agents`, label: 'Agents', icon: Bot },
         { href: `/projects/${projectId}/knowledge`, label: 'Knowledge', icon: BookOpen },
-        { href: `/projects/${projectId}/conversations`, label: 'Conversations', icon: MessageSquare },
         { href: `/projects/${projectId}/integrations`, label: 'Integrations', icon: Plug },
-        { href: `/projects/${projectId}/playground`, label: 'Playground', icon: Play },
         { href: `/projects/${projectId}/live-chat`, label: 'Live chat', icon: MessageCircle },
         { href: `/projects/${projectId}/human-agents`, label: 'Human agents', icon: UserCircle },
       ]

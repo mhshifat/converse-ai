@@ -251,12 +251,12 @@ export function ConversationsList({ projectId }: ConversationsListProps) {
                   </div>
 
                   {detail.compiledData && Object.keys(detail.compiledData).length > 0 && (
-                    <div>
+                    <div className="min-w-0">
                       <div className="flex items-center gap-2 mb-2">
                         <Bot className="size-4 text-muted-foreground" />
                         <h3 className="text-sm font-semibold">Compiled data</h3>
                       </div>
-                      <pre className="max-h-[180px] overflow-auto rounded-lg border border-border/40 bg-muted/20 p-3 text-xs font-mono text-foreground">
+                      <pre className="min-w-0 max-h-[180px] overflow-auto rounded-lg border border-border/40 bg-muted/20 p-3 text-xs font-mono text-foreground whitespace-pre-wrap break-words">
                         {JSON.stringify(detail.compiledData, null, 2)}
                       </pre>
                     </div>

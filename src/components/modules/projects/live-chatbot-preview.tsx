@@ -65,16 +65,23 @@ export function LiveChatbotPreview({
   const userBubbleBg = msgCfg.userBubbleBackground ?? primary;
   const sendBtnBg = footer.sendButtonBackground ?? primary;
 
-  const startConversation = trpc.widget.startConversation.useMutation({
+  const sendFirstMessage = trpc.widget.sendFirstMessage.useMutation({
     onSuccess: (data) => {
-      if (data?.id) {
-        setConversationId(data.id);
+      if (data?.conversationId) {
+        setConversationId(data.conversationId);
         setEnded(false);
-        setMessages([]);
-        onConversationInfo?.({
-          agentName: (data as { agentName?: string }).agentName ?? 'Unknown',
-          conversationId: data.id,
-        });
+        onConversationInfo?.({ conversationId: data.conversationId, agentName: 'Unknown' });
+      }
+      if (data?.response != null) {
+        setMessages((prev) => [...prev, { role: 'agent', content: data.response }]);
+      }
+      if (data?.handoffRequested) setHandoffRequested(true);
+      if (data?.conversationEnded) {
+        setConversationId(null);
+        setEnded(true);
+        const endedMessages = (data as { messages?: ChatMessage[] }).messages ?? [];
+        const compiled = (data as { compiledData?: Record<string, unknown> }).compiledData ?? {};
+        onConversationEnd?.({ messages: endedMessages, compiledData: compiled });
       }
     },
   });
@@ -86,6 +93,13 @@ export function LiveChatbotPreview({
       }
       if (data?.handoffRequested) {
         setHandoffRequested(true);
+      }
+      if (data?.conversationEnded) {
+        setConversationId(null);
+        setEnded(true);
+        const endedMessages = (data as { messages?: ChatMessage[] }).messages ?? [];
+        const compiled = (data as { compiledData?: Record<string, unknown> }).compiledData ?? {};
+        onConversationEnd?.({ messages: endedMessages, compiledData: compiled });
       }
     },
   });
@@ -134,13 +148,6 @@ export function LiveChatbotPreview({
     }
     setShowInactivityWarning(false);
   }, []);
-
-  useEffect(() => {
-    if (!apiKey || conversationId || startConversation.isPending) return;
-    const channel = mode === 'voice' ? 'call' : 'text';
-    startConversation.mutate({ apiKey, customerId, channel });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiKey, customerId]);
 
   const hasUserSentMessage = messages.some((m) => m.role === 'customer');
 
@@ -192,12 +199,22 @@ export function LiveChatbotPreview({
 
   const handleSend = useCallback(() => {
     const text = input.trim();
-    if (!text || !conversationId || sendMessage.isPending) return;
+    if (!text) return;
+    if (conversationId) {
+      if (sendMessage.isPending) return;
+    } else {
+      if (!apiKey || sendFirstMessage.isPending) return;
+    }
+    const channel = mode === 'voice' ? 'call' : 'text';
     setInput('');
     setMessages((prev) => [...prev, { role: 'customer', content: text }]);
-    sendMessage.mutate({ conversationId, content: text });
+    if (conversationId) {
+      sendMessage.mutate({ conversationId, content: text });
+    } else {
+      sendFirstMessage.mutate({ apiKey, customerId, channel, content: text });
+    }
     startInactivityTimersAfterSend();
-  }, [input, conversationId, sendMessage, startInactivityTimersAfterSend]);
+  }, [input, conversationId, apiKey, customerId, mode, sendMessage, sendFirstMessage, startInactivityTimersAfterSend]);
 
   const handleClose = useCallback(() => {
     setOpen(false);
@@ -451,8 +468,8 @@ export function LiveChatbotPreview({
                 )}
 
                 {ended && (
-                  <div className="text-center text-xs text-muted-foreground py-2">
-                    Conversation ended.
+                  <div className="text-center text-xs text-muted-foreground py-2 px-2 rounded-md bg-muted/50">
+                    This conversation has ended. Send a new message below to start a new conversation.
                   </div>
                 )}
               </div>
@@ -544,7 +561,7 @@ export function LiveChatbotPreview({
                               handleSend();
                             }
                           }}
-                          disabled={!conversationId || ended}
+                          disabled={!apiKey}
                           placeholder={footer.inputPlaceholder}
                           className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:opacity-70 disabled:opacity-50"
                           style={{ color: footer.inputTextColor }}
@@ -553,7 +570,7 @@ export function LiveChatbotPreview({
                       <button
                         type="button"
                         onClick={handleSend}
-                        disabled={!conversationId || ended || sendMessage.isPending || !input.trim()}
+                        disabled={!input.trim() || (conversationId ? sendMessage.isPending : !apiKey || sendFirstMessage.isPending)}
                         className="flex size-10 shrink-0 items-center justify-center rounded-full transition-transform active:scale-95 hover:opacity-90 disabled:opacity-50"
                         style={{
                           backgroundColor: sendBtnBg,
