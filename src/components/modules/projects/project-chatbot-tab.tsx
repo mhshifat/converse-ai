@@ -109,40 +109,73 @@ export function ProjectChatbotTab({ projectId, initialChatbot }: ProjectChatbotT
     <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
       {/* Left: customization form */}
       <div className="min-w-0 flex-1 space-y-6">
+        {/* App information (branding) */}
+        <Section title="App information (branding)">
+          <p className="text-muted-foreground text-sm mb-4">
+            Name, logo, and colors shown in the chat widget header and bubbles. Set these when creating your chatbot so the widget matches your brand.
+          </p>
+          <Field label="App name">
+            <Input
+              value={config.header.title}
+              onChange={(e) => patchNested('header', { title: e.target.value })}
+              placeholder="e.g. Support, Chat, Help"
+            />
+          </Field>
+          <Field label="Logo URL (optional)">
+            <Input
+              value={config.header.logoUrl ?? ''}
+              onChange={(e) => patchNested('header', { logoUrl: e.target.value || undefined })}
+              placeholder="https://your-domain.com/logo.png"
+            />
+          </Field>
+          <Field label="Subtitle or tagline (optional)">
+            <Input
+              value={config.header.subtitle ?? ''}
+              onChange={(e) => patchNested('header', { subtitle: e.target.value || undefined })}
+              placeholder="e.g. Ask us anything"
+            />
+          </Field>
+          <Field label="Status text">
+            <Input
+              value={config.header.statusText ?? 'Online'}
+              onChange={(e) => patchNested('header', { statusText: e.target.value || 'Online' })}
+              placeholder="e.g. Online, Here to help"
+            />
+          </Field>
+          <Field label="Brand / primary color">
+            <ColorPicker
+              value={config.primaryColor}
+              onChange={(v) => {
+                setConfig((prev) => ({
+                  ...prev,
+                  primaryColor: v,
+                  bubble: { ...prev.bubble, backgroundColor: v },
+                  messages: { ...prev.messages, userBubbleBackground: v },
+                  footer: { ...prev.footer, sendButtonBackground: v },
+                }));
+              }}
+            />
+          </Field>
+        </Section>
+
         {/* General */}
         <Section title="General">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Primary color">
-              <ColorPicker
-                value={config.primaryColor}
-                onChange={(v) => {
-                  setConfig((prev) => ({
-                    ...prev,
-                    primaryColor: v,
-                    bubble: { ...prev.bubble, backgroundColor: v },
-                    messages: { ...prev.messages, userBubbleBackground: v },
-                    footer: { ...prev.footer, sendButtonBackground: v },
-                  }));
-                }}
-              />
-            </Field>
-            <Field label="Position">
-              <Select
-                value={config.position}
-                onValueChange={(v) => patch('position', v as ChatbotWidgetConfig['position'])}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="bottom-right">Bottom right</SelectItem>
-                  <SelectItem value="bottom-left">Bottom left</SelectItem>
-                  <SelectItem value="top-right">Top right</SelectItem>
-                  <SelectItem value="top-left">Top left</SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
-          </div>
+          <Field label="Position">
+            <Select
+              value={config.position}
+              onValueChange={(v) => patch('position', v as ChatbotWidgetConfig['position'])}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="bottom-right">Bottom right</SelectItem>
+                <SelectItem value="bottom-left">Bottom left</SelectItem>
+                <SelectItem value="top-right">Top right</SelectItem>
+                <SelectItem value="top-left">Top left</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
           <Field label="Welcome message">
             <Input
               value={config.welcomeMessage}
@@ -234,15 +267,8 @@ export function ProjectChatbotTab({ projectId, initialChatbot }: ProjectChatbotT
           </div>
         </Section>
 
-        {/* Header */}
-        <Section title="Header">
-          <Field label="Company logo URL (optional)">
-            <Input
-              value={config.header.logoUrl ?? ''}
-              onChange={(e) => patchNested('header', { logoUrl: e.target.value || undefined })}
-              placeholder="https://…"
-            />
-          </Field>
+        {/* Header (fine-tuning; app name, logo URL, subtitle, status are in App information above) */}
+        <Section title="Header (appearance)">
           <Field label="Logo size (px)">
             <Input
               type="number"
@@ -250,27 +276,6 @@ export function ProjectChatbotTab({ projectId, initialChatbot }: ProjectChatbotT
               max={48}
               value={config.header.logoSize ?? 28}
               onChange={(e) => patchNested('header', { logoSize: Number(e.target.value) || 28 })}
-            />
-          </Field>
-          <Field label="Title">
-            <Input
-              value={config.header.title}
-              onChange={(e) => patchNested('header', { title: e.target.value })}
-              placeholder="Chat"
-            />
-          </Field>
-          <Field label="Subtitle (optional)">
-            <Input
-              value={config.header.subtitle ?? ''}
-              onChange={(e) => patchNested('header', { subtitle: e.target.value || undefined })}
-              placeholder="e.g. Ask us anything"
-            />
-          </Field>
-          <Field label="Status text (center of header)">
-            <Input
-              value={config.header.statusText ?? ''}
-              onChange={(e) => patchNested('header', { statusText: e.target.value || undefined })}
-              placeholder="e.g. Online, Here to help"
             />
           </Field>
           <Field label="Status dot color">
