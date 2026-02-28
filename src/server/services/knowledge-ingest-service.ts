@@ -2,6 +2,7 @@ import * as cheerio from 'cheerio';
 import mammoth from 'mammoth';
 import * as XLSX from 'xlsx';
 import * as projectKnowledgeRepo from '../repositories/project-knowledge-repository';
+import * as ragIndexingService from './rag-indexing-service';
 
 const MAX_TEXT_LENGTH = 120_000;
 
@@ -127,7 +128,14 @@ export async function ingestFile(
   const entry = await projectKnowledgeRepo.create(projectId, tenantId, {
     title: `Document: ${baseName}`,
     content,
+    sourceType: 'file',
+    sourceRef: filename,
   });
+  if (entry) {
+    void ragIndexingService.indexKnowledgeEntry(projectId, entry.id, content, tenantId).catch((err) =>
+      console.warn('[RAG] Index after file ingest failed:', err instanceof Error ? err.message : err)
+    );
+  }
   return {
     success: !!entry,
     title: filename,
@@ -189,10 +197,105 @@ export async function ingestUrl(
   const entry = await projectKnowledgeRepo.create(projectId, tenantId, {
     title: `Website: ${host}`,
     content,
+    sourceType: 'url',
+    sourceRef: url,
   });
+  if (entry) {
+    void ragIndexingService.indexKnowledgeEntry(projectId, entry.id, content, tenantId).catch((err) =>
+      console.warn('[RAG] Index after URL ingest failed:', err instanceof Error ? err.message : err)
+    );
+  }
   return {
     success: !!entry,
     title: url,
     entriesCreated: entry ? 1 : 0,
+  };
+}
+
+/**
+ * Re-ingest a knowledge entry by id. For url source: re-fetches and updates content.
+ * For file source: returns error asking user to re-upload (no stored file).
+ */
+export async function reIngestById(
+  entryId: string,
+  projectId: string,
+  tenantId: string
+): Promise<IngestResult> {
+  const entry = await projectKnowledgeRepo.getById(entryId, projectId, tenantId);
+  if (!entry) {
+    return { success: false, title: '', entriesCreated: 0, error: 'Entry not found' };
+  }
+  if (entry.sourceType === 'url' && entry.sourceRef) {
+    let html: string;
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+      const res = await fetch(entry.sourceRef, {
+        method: 'GET',
+        headers: {
+          Accept: 'text/html,application/xhtml+xml',
+          'User-Agent': 'ConverseAI-KnowledgeBot/1.0',
+        },
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      if (!res.ok) {
+        return {
+          success: false,
+          title: entry.sourceRef,
+          entriesCreated: 0,
+          error: `HTTP ${res.status}: ${res.statusText}`,
+        };
+      }
+      html = await res.text();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        success: false,
+        title: entry.sourceRef,
+        entriesCreated: 0,
+        error: message.includes('abort') ? 'Request timed out.' : message,
+      };
+    }
+    const text = extractHtml(html);
+    if (!text || text.length < 10) {
+      return {
+        success: false,
+        title: entry.sourceRef,
+        entriesCreated: 0,
+        error: 'No main text could be extracted from the page.',
+      };
+    }
+    const content = truncate(text);
+    const updated = await projectKnowledgeRepo.updateContent(
+      entryId,
+      projectId,
+      tenantId,
+      { title: entry.title, content }
+    );
+    if (updated) {
+      void ragIndexingService.indexKnowledgeEntry(projectId, entryId, content, tenantId).catch((err) =>
+        console.warn('[RAG] Index after re-ingest failed:', err instanceof Error ? err.message : err)
+      );
+    }
+    return {
+      success: !!updated,
+      title: entry.sourceRef,
+      entriesCreated: updated ? 1 : 0,
+    };
+  }
+  if (entry.sourceType === 'file') {
+    return {
+      success: false,
+      title: entry.sourceRef ?? entry.title ?? '',
+      entriesCreated: 0,
+      error: 'Re-upload the file using "Upload file" to refresh this document.',
+    };
+  }
+  return {
+    success: false,
+    title: entry.title ?? '',
+    entriesCreated: 0,
+    error: 'Manual entries cannot be re-ingested. Edit the content instead.',
   };
 }

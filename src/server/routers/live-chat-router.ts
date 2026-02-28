@@ -41,6 +41,7 @@ export const liveChatRouter = router({
       z.object({
         conversationId: z.string().uuid(),
         content: z.string().min(1),
+        payload: z.record(z.unknown()).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -51,7 +52,8 @@ export const liveChatRouter = router({
           input.conversationId,
           input.content,
           ctx.user.id,
-          ctx.user.tenantId
+          ctx.user.tenantId,
+          input.payload ?? undefined
         );
         if (!result.success) throwNotFoundWithId(correlationId, 'Conversation not found or not assigned to you');
         return result;
@@ -97,6 +99,49 @@ export const liveChatRouter = router({
         const result = await conversationService.endConversation(input.conversationId);
         if (!result) throwNotFoundWithId(correlationId, 'Conversation not found');
         return result;
+      });
+    }),
+
+  updateInternalNotes: protectedProcedure
+    .input(
+      z.object({
+        conversationId: z.string().uuid(),
+        internalNotes: z.string().nullable(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      return withCorrelationError('liveChat.updateInternalNotes', async (correlationId) => {
+        const isHuman = await humanAgentRepo.isHumanAgent(ctx.user.id, ctx.user.tenantId);
+        if (!isHuman) throw new Error('You are not a human agent');
+        const ok = await conversationRepo.setInternalNotes(
+          input.conversationId,
+          ctx.user.tenantId,
+          input.internalNotes
+        );
+        if (!ok) throwNotFoundWithId(correlationId, 'Conversation not found');
+        return { success: true };
+      });
+    }),
+
+  transferToAgent: protectedProcedure
+    .input(
+      z.object({
+        conversationId: z.string().uuid(),
+        targetUserId: z.string().uuid(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      return withCorrelationError('liveChat.transferToAgent', async (correlationId) => {
+        const isHuman = await humanAgentRepo.isHumanAgent(ctx.user.id, ctx.user.tenantId);
+        if (!isHuman) throw new Error('You are not a human agent');
+        const ok = await conversationService.transferConversationToAgent(
+          input.conversationId,
+          ctx.user.id,
+          input.targetUserId,
+          ctx.user.tenantId
+        );
+        if (!ok) throwNotFoundWithId(correlationId, 'Conversation not found or not assigned to you');
+        return { success: true };
       });
     }),
 });

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { router, publicProcedure } from '@/server/trpc';
 import { withCorrelationError, throwNotFoundWithId } from '@/server/trpc-error';
 import * as conversationService from '../services/conversation-service';
+import * as groqVoice from '../services/groq-voice-service';
 
 export const widgetRouter = router({
   getConfig: publicProcedure
@@ -10,9 +11,20 @@ export const widgetRouter = router({
       return withCorrelationError('widget.getConfig', async (correlationId) => {
         const chatbot = await conversationService.getChatbotByApiKey(input.apiKey);
         if (!chatbot) throwNotFoundWithId(correlationId, 'Invalid API key');
+        const project = chatbot.project as {
+          default_rating_type?: string;
+          proactive_delay_seconds?: number | null;
+          proactive_on_exit_intent?: boolean | null;
+        } | null;
+        const config = {
+          ...(chatbot.config as Record<string, unknown>),
+          defaultRatingType: project?.default_rating_type === 'nps' ? 'nps' : 'thumbs',
+          proactiveDelaySeconds: project?.proactive_delay_seconds ?? undefined,
+          proactiveOnExitIntent: project?.proactive_on_exit_intent ?? false,
+        };
         return {
           name: chatbot.name,
-          config: chatbot.config as Record<string, unknown>,
+          config,
         };
       });
     }),
@@ -35,6 +47,7 @@ export const widgetRouter = router({
           input.channel
         );
         if (!result) throwNotFoundWithId(correlationId, 'No agent available');
+        if ('unavailable' in result) return result;
         return result;
       });
     }),
@@ -46,6 +59,7 @@ export const widgetRouter = router({
         customerId: z.string().min(1),
         channel: z.enum(['text', 'call']),
         content: z.string().min(1),
+        attachmentUrl: z.string().url().optional(),
       })
     )
     .mutation(async ({ input }) => {
@@ -54,9 +68,11 @@ export const widgetRouter = router({
           input.apiKey,
           input.customerId,
           input.channel,
-          input.content
+          input.content,
+          input.attachmentUrl
         );
         if (!result) throwNotFoundWithId(correlationId, 'Invalid API key or no agent available');
+        if ('unavailable' in result) return result;
         return result;
       });
     }),
@@ -66,6 +82,7 @@ export const widgetRouter = router({
       z.object({
         conversationId: z.string().uuid(),
         content: z.string().min(1),
+        attachmentUrl: z.string().url().optional(),
       })
     )
     .mutation(async ({ input }) => {
@@ -73,7 +90,8 @@ export const widgetRouter = router({
         const result = await conversationService.sendMessage(
           input.conversationId,
           input.content,
-          'customer'
+          'customer',
+          input.attachmentUrl
         );
         if (!result) throwNotFoundWithId(correlationId, 'Conversation not found or ended');
         return result;
@@ -107,6 +125,62 @@ export const widgetRouter = router({
         const data = await conversationService.getConversationMessagesForWidget(input.conversationId);
         if (!data) throwNotFoundWithId(correlationId, 'Conversation not found');
         return data;
+      });
+    }),
+
+  submitRating: publicProcedure
+    .input(
+      z.object({
+        conversationId: z.string().uuid(),
+        ratingType: z.enum(['thumbs', 'nps']),
+        ratingValue: z.number(), // 1/-1 for thumbs, 0-10 for NPS
+      })
+    )
+    .mutation(async ({ input }) => {
+      return withCorrelationError('widget.submitRating', async (correlationId) => {
+        const ok = await conversationService.submitRating(
+          input.conversationId,
+          input.ratingType,
+          input.ratingValue
+        );
+        if (!ok) throwNotFoundWithId(correlationId, 'Conversation not found or not ended');
+        return { success: true };
+      });
+    }),
+
+  transcribeVoice: publicProcedure
+    .input(
+      z.object({
+        apiKey: z.string().min(1),
+        audioBase64: z.string().min(1),
+        contentType: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      return withCorrelationError('widget.transcribeVoice', async (correlationId) => {
+        const chatbot = await conversationService.getChatbotByApiKey(input.apiKey);
+        if (!chatbot) throwNotFoundWithId(correlationId, 'Invalid API key');
+        const buffer = Buffer.from(input.audioBase64, 'base64');
+        const text = await groqVoice.transcribeAudio(buffer, {
+          contentType: input.contentType ?? 'audio/webm',
+        });
+        return { text: text || '(no speech detected)' };
+      });
+    }),
+
+  synthesizeSpeech: publicProcedure
+    .input(
+      z.object({
+        apiKey: z.string().min(1),
+        text: z.string().min(1),
+      })
+    )
+    .mutation(async ({ input }) => {
+      return withCorrelationError('widget.synthesizeSpeech', async (correlationId) => {
+        const chatbot = await conversationService.getChatbotByApiKey(input.apiKey);
+        if (!chatbot) throwNotFoundWithId(correlationId, 'Invalid API key');
+        const buffer = await groqVoice.synthesizeSpeech(input.text);
+        return { audioBase64: buffer.toString('base64') };
       });
     }),
 });

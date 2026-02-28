@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getIronSession } from 'iron-session';
-import { cookies } from 'next/headers';
-import { sessionOptions, type SessionData } from '@/lib/session';
+import { getValidatedSessionUser } from '@/server/session-validation';
 import { prisma } from '@/lib/prisma';
 import { ingestFile, ingestUrl } from '@/server/services/knowledge-ingest-service';
 
@@ -12,13 +10,13 @@ export async function POST(
   context: { params: Promise<{ id: string }> }
 ) {
   const { id: projectId } = await context.params;
-  const session = await getIronSession<SessionData>(await cookies(), sessionOptions);
-  if (!session.user) {
+  const user = await getValidatedSessionUser();
+  if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const project = await prisma.project.findFirst({
-    where: { id: projectId, tenant_id: session.user.tenantId },
+    where: { id: projectId, tenant_id: user.tenantId },
   });
   if (!project) {
     return NextResponse.json({ error: 'Project not found' }, { status: 404 });
@@ -40,7 +38,7 @@ export async function POST(
       buffer,
       file.name,
       projectId,
-      session.user.tenantId
+      user.tenantId
     );
     return NextResponse.json(result);
   }
@@ -51,7 +49,7 @@ export async function POST(
     } catch {
       return NextResponse.json({ error: 'Invalid URL' }, { status: 400 });
     }
-    const result = await ingestUrl(url.trim(), projectId, session.user.tenantId);
+    const result = await ingestUrl(url.trim(), projectId, user.tenantId);
     return NextResponse.json(result);
   }
 

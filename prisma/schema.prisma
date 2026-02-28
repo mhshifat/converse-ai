@@ -10,16 +10,18 @@ datasource db {
 }
 
 model tenant {
-  id           String   @id @default(uuid())
-  name         String
-  slug         String   @unique
-  created_at   DateTime @default(now())
-  updated_at   DateTime @updatedAt
-  users        user[]
-  projects     project[]
-  agents       agent[]
-  integrations integration[]
-  human_agents human_agent[]
+  id               String           @id @default(uuid())
+  name             String
+  slug             String           @unique
+  created_at       DateTime         @default(now())
+  updated_at       DateTime         @updatedAt
+  users            user[]
+  projects         project[]
+  agents           agent[]
+  integrations     integration[]
+  human_agents     human_agent[]
+  canned_responses canned_response[]
+  contacts         contact[]
 }
 
 model human_agent {
@@ -28,6 +30,7 @@ model human_agent {
   user_id      String
   display_name String?
   is_available Boolean  @default(false)
+  skill_tags   Json?    // string[] for queue routing (e.g. ["billing", "support"])
   created_at   DateTime @default(now())
   updated_at   DateTime @updatedAt
   tenant       tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
@@ -64,33 +67,47 @@ model verification_token {
 }
 
 model project {
-  id                       String   @id @default(uuid())
-  tenant_id                String
-  name                     String
-  description              String?
-  icon                     String?  // Lucide icon name e.g. FolderKanban
-  data_schema              Json?    // JSON schema for extracting structured data from conversations
+  id                        String   @id @default(uuid())
+  tenant_id                 String
+  name                      String
+  description               String?
+  icon                      String?  // Lucide icon name e.g. FolderKanban
+  data_schema               Json?    // JSON schema for extracting structured data from conversations
   delivery_integration_ids  Json?    // array of integration ids for email/discord/sms delivery
   knowledge_base_url       String?  // optional URL to fetch external knowledge (GET JSON array of { content } or text)
   conversation_mode        String?  @default("both") // 'human_only' | 'ai_only' | 'both'
-  created_at               DateTime @default(now())
-  updated_at               DateTime @updatedAt
-  tenant                   tenant   @relation(fields: [tenant_id], references: [id])
-  chatbots                 chatbot[]
-  project_agents           project_agent[]
-  project_knowledge        project_knowledge[]
+  use_rag                   Boolean  @default(false)
+  default_rating_type       String?  @default("thumbs") // 'thumbs' | 'nps' for widget
+  business_hours            Json?    // { timezone, schedule: [{ day, start, end }] } or null = 24/7
+  out_of_office_message    String?  // shown when outside business hours
+  queue_overflow_message   String?  // shown when no agent available
+  sla_escalate_minutes     Int?     // auto handoff if no first response within X min
+  escalation_keywords      Json?    // string[] e.g. ["manager", "human"] for keyword-based handoff
+  proactive_delay_seconds  Int?     // open widget after X seconds on page (null = disabled)
+  proactive_on_exit_intent Boolean  @default(false) // open widget on exit intent
+  created_at                DateTime @default(now())
+  updated_at                DateTime @updatedAt
+  tenant                    tenant   @relation(fields: [tenant_id], references: [id])
+  chatbots                  chatbot[]
+  project_agents            project_agent[]
+  project_knowledge         project_knowledge[]
+  contacts                  contact[]
 }
 
 model project_knowledge {
-  id         String   @id @default(uuid())
-  project_id String
-  title      String?  // e.g. "FAQ", "Product catalog"
-  content    String   // text chunk to inject into agent context
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-  project    project  @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  id               String           @id @default(uuid())
+  project_id       String
+  title            String?          // e.g. "FAQ", "Product catalog"
+  content          String           // text chunk to inject into agent context
+  source_type      String?          // 'manual' | 'file' | 'url' (for re-ingest)
+  source_ref       String?          // original filename or URL for re-ingest
+  created_at       DateTime         @default(now())
+  updated_at       DateTime         @updatedAt
+  project      project   @relation(fields: [project_id], references: [id], onDelete: Cascade)
   @@index([project_id])
 }
+
+// -- RAG: knowledge_chunk table is created in migration (pgvector); use raw SQL in knowledge-chunk-repository
 
 model project_agent {
   id              String   @id @default(uuid())
@@ -118,34 +135,45 @@ model chatbot {
 }
 
 model agent {
-  id          String   @id @default(uuid())
-  tenant_id   String
+  id           String          @id @default(uuid())
+  tenant_id    String
   name        String
   system_prompt String
   settings    Json
-  created_at  DateTime @default(now())
-  updated_at  DateTime @updatedAt
-  tenant      tenant   @relation(fields: [tenant_id], references: [id])
+  created_at  DateTime        @default(now())
+  updated_at  DateTime        @updatedAt
+  tenant      tenant          @relation(fields: [tenant_id], references: [id])
   conversations conversation[] @relation("AgentConversations")
   project_agents project_agent[]
+  versions    agent_version[]
 }
 
 model conversation {
-  id                      String    @id @default(uuid())
-  chatbot_id              String
-  customer_id             String
-  agent_id                String
-  channel                 String    // 'text' | 'call'
-  status                  String    // 'active' | 'closed'
-  compiled_data           Json?     // structured data extracted when conversation ends
-  started_at              DateTime  @default(now())
-  ended_at                DateTime?
-  handoff_requested_at     DateTime? // when customer asked for a human
-  assigned_human_agent_id String?   // user_id of human agent when assigned
-  chatbot                 chatbot   @relation(fields: [chatbot_id], references: [id])
-  agent                   agent     @relation("AgentConversations", fields: [agent_id], references: [id])
-  messages                message[]
+  id                        String    @id @default(uuid())
+  chatbot_id                String
+  customer_id               String
+  agent_id                  String
+  channel                   String    // 'text' | 'call'
+  status                    String    // 'active' | 'closed'
+  compiled_data             Json?     // structured data extracted when conversation ends
+  started_at                DateTime  @default(now())
+  ended_at                  DateTime?
+  handoff_requested_at      DateTime? // when customer asked for a human
+  assigned_human_agent_id   String?   // user_id of human agent when assigned
+  internal_notes            String?   // agent-only notes on conversation
+  rating_type               String?   // 'thumbs' | 'nps'
+  rating_value              Int?      // 1/-1 for thumbs, 0-10 for NPS
+  rated_at                  DateTime?
+  first_response_at         DateTime? // first agent reply (SLA)
+  transferred_to_agent_id   String?   // when transferred to another human
+  skill_tags                Json?     // string[] for queue routing
+  chatbot                   chatbot   @relation(fields: [chatbot_id], references: [id])
+  agent                     agent     @relation("AgentConversations", fields: [agent_id], references: [id])
+  messages                  message[]
+  @@index([chatbot_id])
+  @@index([chatbot_id, started_at])
   @@index([handoff_requested_at, assigned_human_agent_id])
+  @@index([status, handoff_requested_at])
 }
 
 model message {
@@ -154,16 +182,63 @@ model message {
   sender_type      String   // 'customer' | 'agent' | 'human_agent'
   sender_id        String
   content          String
+  payload          Json?    // rich: { type: 'card'|'quick_replies'|'image', ... }
   created_at       DateTime @default(now())
   conversation     conversation @relation(fields: [conversation_id], references: [id])
+  @@index([conversation_id])
 }
 
 model integration {
   id          String   @id @default(uuid())
   tenant_id   String
-  type        String   // 'email' | 'discord' | 'sms'
-  config      Json
+  type        String   // 'email' | 'discord' | 'sms' | 'webhook' | 'slack'
+  config      Json     // webhook: { url, events: ['conversation.created','message.sent'] }
   created_at  DateTime @default(now())
   updated_at  DateTime @updatedAt
   tenant      tenant   @relation(fields: [tenant_id], references: [id])
+}
+
+// Customer/contact entity: name, email, custom fields; merged with conversations via external_id = conversation.customer_id
+model contact {
+  id             String   @id @default(uuid())
+  tenant_id      String
+  project_id     String?  // null = tenant-wide
+  external_id    String   // widget customer_id; unique per project or tenant
+  name           String?
+  email          String?
+  custom_fields  Json?    // key-value for CRM-style fields
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+  tenant         tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  project        project? @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  @@unique([tenant_id, project_id, external_id])
+  @@index([tenant_id])
+  @@index([project_id])
+}
+
+// Canned responses / quick replies for human agents
+model canned_response {
+  id         String   @id @default(uuid())
+  tenant_id  String
+  project_id String?  // null = tenant-wide
+  shortcut   String   // e.g. "/thanks"
+  content    String
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  tenant     tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  @@index([tenant_id])
+  @@index([tenant_id, project_id])
+}
+
+// Agent config versioning for rollback
+model agent_version {
+  id              String   @id @default(uuid())
+  agent_id        String
+  version         Int      // 1, 2, 3...
+  system_prompt   String
+  settings        Json
+  created_at      DateTime @default(now())
+  agent           agent    @relation(fields: [agent_id], references: [id], onDelete: Cascade)
+  @@unique([agent_id, version])
+  @@index([agent_id])
 }

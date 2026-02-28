@@ -1,9 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { trpc } from '@/utils/trpc';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Empty,
@@ -12,7 +14,19 @@ import {
   EmptyTitle,
   EmptyDescription,
 } from '@/components/ui/empty';
-import { MessageSquare, User, Send, Loader2, XCircle } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import { MessageSquare, User, Send, Loader2, XCircle, ChevronDown, MessageCircle, ArrowRightLeft, Mic, Square, Phone, PhoneOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface LiveChatContentProps {
@@ -22,19 +36,37 @@ interface LiveChatContentProps {
 export function LiveChatContent({ projectId }: LiveChatContentProps = {}) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [input, setInput] = useState('');
+  const [internalNotesOpen, setInternalNotesOpen] = useState(false);
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
+  const [voiceUploading, setVoiceUploading] = useState(false);
+  const [liveVoiceJoined, setLiveVoiceJoined] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const voiceSignalingWsRef = useRef<WebSocket | null>(null);
+  const voicePeerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const voiceLocalStreamRef = useRef<MediaStream | null>(null);
+  const signalingUrl =
+    typeof process !== 'undefined' ? (process.env.NEXT_PUBLIC_VOICE_SIGNALING_WS_URL as string | undefined) : undefined;
 
   const { data: handoff, isLoading } = trpc.liveChat.listHandoffConversations.useQuery(
     projectId ? { projectId } : undefined,
-    { refetchInterval: 5000 }
+    { refetchInterval: 5000, staleTime: 3000 }
   );
   const unassigned = handoff?.unassigned ?? [];
   const myAssigned = handoff?.myAssigned ?? [];
   const isAssignedToSelected =
     !!selectedId && myAssigned.some((c) => c.id === selectedId);
+  const isAssigned = !!selectedId && myAssigned.some((c) => c.id === selectedId);
   const { data: conversation, isLoading: loadingConv } = trpc.liveChat.getConversation.useQuery(
     { conversationId: selectedId! },
-    { enabled: !!selectedId, refetchInterval: isAssignedToSelected ? 3000 : false }
+    {
+      enabled: !!selectedId,
+      refetchInterval: isAssignedToSelected ? 3000 : false,
+      staleTime: isAssignedToSelected ? 2000 : 10_000,
+    }
   );
+  const isVoiceChannel = conversation?.channel === 'call';
   const utils = trpc.useUtils();
   const assignMutation = trpc.liveChat.assignToMe.useMutation({
     onSuccess: () => {
@@ -48,6 +80,132 @@ export function LiveChatContent({ projectId }: LiveChatContentProps = {}) {
       void utils.liveChat.getConversation.invalidate({ conversationId: selectedId! });
     },
   });
+
+  const startVoiceRecording = useCallback(async () => {
+    if (!selectedId) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      audioChunksRef.current = [];
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : 'audio/webm';
+      const recorder = new MediaRecorder(stream);
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+      recorder.start();
+      mediaRecorderRef.current = recorder;
+      setIsRecordingVoice(true);
+    } catch (err) {
+      console.error('Microphone access failed', err);
+    }
+  }, [selectedId]);
+
+  const stopVoiceRecordingAndSend = useCallback(async () => {
+    const rec = mediaRecorderRef.current;
+    if (!rec || rec.state === 'inactive') return;
+    rec.stop();
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    mediaRecorderRef.current = null;
+    setIsRecordingVoice(false);
+    const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+    if (blob.size === 0 || !selectedId) return;
+    setVoiceUploading(true);
+    try {
+      const form = new FormData();
+      form.set('file', blob, 'voice.webm');
+      const res = await fetch('/api/upload/voice', { method: 'POST', body: form, credentials: 'include' });
+      const data = (await res.json()) as { url?: string; error?: string };
+      if (!res.ok) {
+        console.error(data.error ?? 'Upload failed');
+        setVoiceUploading(false);
+        return;
+      }
+      if (data.url) {
+        sendMutation.mutate({
+          conversationId: selectedId,
+          content: '(Voice message)',
+          payload: { type: 'audio', url: data.url },
+        });
+      }
+    } catch (err) {
+      console.error('Voice upload failed', err);
+    }
+    setVoiceUploading(false);
+  }, [selectedId, sendMutation]);
+
+  const leaveLiveVoice = useCallback(() => {
+    voiceSignalingWsRef.current?.close();
+    voiceSignalingWsRef.current = null;
+    voicePeerConnectionRef.current?.close();
+    voicePeerConnectionRef.current = null;
+    voiceLocalStreamRef.current?.getTracks().forEach((t) => t.stop());
+    voiceLocalStreamRef.current = null;
+    setLiveVoiceJoined(false);
+  }, []);
+
+  const joinLiveVoice = useCallback(async () => {
+    if (!selectedId || !signalingUrl) return;
+    const url =
+      signalingUrl.startsWith('ws://') || signalingUrl.startsWith('wss://')
+        ? signalingUrl
+        : `wss://${signalingUrl}`;
+    const ws = new WebSocket(url);
+    voiceSignalingWsRef.current = ws;
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ type: 'join', conversationId: selectedId, role: 'human' }));
+    };
+
+    ws.onmessage = async (event) => {
+      try {
+        const data = JSON.parse(event.data as string) as {
+          type: string;
+          sdp?: RTCSessionDescriptionInit;
+          candidate?: RTCIceCandidateInit;
+        };
+        if (data.type === 'joined') {
+          return;
+        }
+        if (data.type === 'create-offer') {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          voiceLocalStreamRef.current = stream;
+          const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+          voicePeerConnectionRef.current = pc;
+          stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          ws.send(JSON.stringify({ type: 'offer', sdp: pc.localDescription }));
+          pc.onicecandidate = (e) => {
+            if (e.candidate) ws.send(JSON.stringify({ type: 'ice-candidate', candidate: e.candidate }));
+          };
+          setLiveVoiceJoined(true);
+          return;
+        }
+        if (data.type === 'answer' && data.sdp) {
+          const pc = voicePeerConnectionRef.current;
+          if (pc) await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+          return;
+        }
+        if (data.type === 'ice-candidate' && data.candidate) {
+          const pc = voicePeerConnectionRef.current;
+          if (pc) pc.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(() => {});
+        }
+      } catch (err) {
+        console.error('Live voice error', err);
+        leaveLiveVoice();
+      }
+    };
+
+    ws.onclose = () => leaveLiveVoice();
+    ws.onerror = () => leaveLiveVoice();
+  }, [selectedId, signalingUrl, leaveLiveVoice]);
+
+  useEffect(() => {
+    if (!selectedId || !isAssigned) leaveLiveVoice();
+  }, [selectedId, isAssigned, leaveLiveVoice]);
   const endConversationMutation = trpc.liveChat.endConversation.useMutation({
     onSuccess: (_, variables) => {
       if (selectedId === variables.conversationId) {
@@ -57,6 +215,26 @@ export function LiveChatContent({ projectId }: LiveChatContentProps = {}) {
       void utils.liveChat.listHandoffConversations.invalidate();
     },
   });
+  const updateNotesMutation = trpc.liveChat.updateInternalNotes.useMutation({
+    onSuccess: () => {
+      if (selectedId) void utils.liveChat.getConversation.invalidate({ conversationId: selectedId });
+    },
+  });
+  const transferMutation = trpc.liveChat.transferToAgent.useMutation({
+    onSuccess: () => {
+      void utils.liveChat.listHandoffConversations.invalidate();
+      if (selectedId) setSelectedId(null);
+    },
+  });
+
+  const { data: cannedList } = trpc.cannedResponse.list.useQuery(
+    { projectId: projectId ?? null },
+    { enabled: !!selectedId && isAssigned }
+  );
+  const { data: humanAgentsList } = trpc.humanAgents.list.useQuery(undefined, {
+    enabled: !!selectedId && isAssigned,
+  });
+  const otherAgents = humanAgentsList ?? [];
 
   if (isLoading) {
     return <Skeleton className="h-64 w-full rounded-lg" />;
@@ -64,7 +242,6 @@ export function LiveChatContent({ projectId }: LiveChatContentProps = {}) {
 
   const all = [...unassigned, ...myAssigned];
   const selected = selectedId ? all.find((c) => c.id === selectedId) : null;
-  const isAssigned = selectedId && myAssigned.some((c) => c.id === selectedId);
 
   return (
     <div className="flex flex-col gap-4 lg:flex-row lg:gap-6">
@@ -162,7 +339,7 @@ export function LiveChatContent({ projectId }: LiveChatContentProps = {}) {
           </Empty>
         ) : (
           <>
-            <div className="p-3 border-b border-border/60 flex items-center justify-between gap-2">
+            <div className="p-3 border-b border-border/60 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2 min-w-0">
                 <User className="size-4 text-muted-foreground shrink-0" />
                 <span className="text-sm font-medium truncate">{selected?.chatbotName}</span>
@@ -177,18 +354,90 @@ export function LiveChatContent({ projectId }: LiveChatContentProps = {}) {
                 )}
               </div>
               {isAssigned && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="shrink-0 gap-1.5 text-muted-foreground hover:text-destructive hover:border-destructive"
-                  onClick={() => endConversationMutation.mutate({ conversationId: selectedId })}
-                  disabled={endConversationMutation.isPending}
-                >
-                  <XCircle className="size-3.5" />
-                  Close
-                </Button>
+                <div className="flex items-center gap-1.5">
+                  {signalingUrl && isVoiceChannel && (
+                    <Button
+                      size="sm"
+                      variant={liveVoiceJoined ? 'default' : 'outline'}
+                      className="shrink-0 gap-1.5"
+                      onClick={liveVoiceJoined ? leaveLiveVoice : joinLiveVoice}
+                      title={liveVoiceJoined ? 'Leave live voice' : 'Speak to customer live (WebRTC)'}
+                    >
+                      {liveVoiceJoined ? (
+                        <>
+                          <PhoneOff className="size-3.5" />
+                          Leave voice
+                        </>
+                      ) : (
+                        <>
+                          <Phone className="size-3.5" />
+                          Join voice
+                        </>
+                      )}
+                    </Button>
+                  )}
+                  {otherAgents.length > 0 && (
+                    <Select
+                      onValueChange={(targetUserId) => {
+                        if (targetUserId && selectedId)
+                          transferMutation.mutate({ conversationId: selectedId, targetUserId });
+                      }}
+                      disabled={transferMutation.isPending}
+                    >
+                      <SelectTrigger className="w-[140px] h-8 gap-1">
+                        <ArrowRightLeft className="size-3.5" />
+                        <SelectValue placeholder="Transfer to..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {otherAgents.map((a) => (
+                          <SelectItem key={a.id} value={a.userId}>
+                            {a.displayName || a.userName || a.userEmail}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="shrink-0 gap-1.5 text-muted-foreground hover:text-destructive hover:border-destructive"
+                    onClick={() => endConversationMutation.mutate({ conversationId: selectedId })}
+                    disabled={endConversationMutation.isPending}
+                  >
+                    <XCircle className="size-3.5" />
+                    Close
+                  </Button>
+                </div>
               )}
             </div>
+            {isAssigned && conversation && (
+              <Collapsible open={internalNotesOpen} onOpenChange={setInternalNotesOpen} className="border-b border-border/60">
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="sm" className="w-full justify-between rounded-none h-9">
+                    <span className="flex items-center gap-2 text-muted-foreground">
+                      <MessageCircle className="size-3.5" />
+                      Internal notes (agent-only)
+                    </span>
+                    <ChevronDown className={cn('size-4 transition-transform', internalNotesOpen && 'rotate-180')} />
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="p-3 space-y-2 bg-muted/30">
+                    <Label className="sr-only">Internal notes</Label>
+                    <Textarea
+                      placeholder="Private notes about this conversation..."
+                      className="min-h-[80px] resize-y"
+                      defaultValue={conversation.internalNotes ?? ''}
+                      onBlur={(e) => {
+                        const v = e.target.value.trim() || null;
+                        if (selectedId && v !== (conversation.internalNotes ?? null))
+                          updateNotesMutation.mutate({ conversationId: selectedId, internalNotes: v });
+                      }}
+                    />
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            )}
             <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-[200px]">
               {loadingConv ? (
                 <Skeleton className="h-32 w-full" />
@@ -214,6 +463,9 @@ export function LiveChatContent({ projectId }: LiveChatContentProps = {}) {
                       {m.senderType === 'human_agent' && (
                         <span className="text-xs font-medium opacity-80 block mb-0.5">You</span>
                       )}
+                      {m.payload?.type === 'audio' && typeof m.payload?.url === 'string' ? (
+                        <audio controls src={m.payload.url} className="max-w-full h-9 mt-1" />
+                      ) : null}
                       {m.content}
                     </div>
                   </div>
@@ -222,11 +474,45 @@ export function LiveChatContent({ projectId }: LiveChatContentProps = {}) {
             </div>
             {isAssigned && (
               <div className="p-3 border-t border-border/60 flex flex-col gap-2">
+                {cannedList && cannedList.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {cannedList.map((c) => (
+                      <Button
+                        key={c.id}
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs font-normal"
+                        onClick={() => setInput((prev) => (prev ? `${prev} ${c.content}` : c.content))}
+                      >
+                        {c.shortcut}
+                      </Button>
+                    ))}
+                  </div>
+                )}
                 <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="shrink-0"
+                    onClick={isRecordingVoice ? stopVoiceRecordingAndSend : startVoiceRecording}
+                    disabled={voiceUploading || sendMutation.isPending}
+                    title={isRecordingVoice ? 'Stop and send voice message' : 'Record voice message'}
+                    aria-label={isRecordingVoice ? 'Stop recording' : 'Record voice'}
+                  >
+                    {voiceUploading ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : isRecordingVoice ? (
+                      <Square className="size-4 text-destructive fill-destructive" />
+                    ) : (
+                      <Mic className="size-4" />
+                    )}
+                  </Button>
                   <Input
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
-                    placeholder="Type a reply..."
+                    placeholder="Type a reply or record voice..."
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault();

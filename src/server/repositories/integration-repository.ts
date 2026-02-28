@@ -8,7 +8,7 @@ export async function listIntegrations(tenantId: string) {
   return items.map((i) => ({
     id: i.id,
     tenantId: i.tenant_id,
-    type: i.type as 'email' | 'discord' | 'sms',
+    type: i.type as 'email' | 'discord' | 'sms' | 'webhook',
     config: i.config as Record<string, unknown>,
     createdAt: i.created_at,
     updatedAt: i.updated_at,
@@ -23,7 +23,7 @@ export async function getIntegrationById(integrationId: string, tenantId: string
   return {
     id: integration.id,
     tenantId: integration.tenant_id,
-    type: integration.type as 'email' | 'discord' | 'sms',
+    type: integration.type as 'email' | 'discord' | 'sms' | 'webhook',
     config: integration.config as Record<string, unknown>,
     createdAt: integration.created_at,
     updatedAt: integration.updated_at,
@@ -32,7 +32,7 @@ export async function getIntegrationById(integrationId: string, tenantId: string
 
 export async function createIntegration(data: {
   tenantId: string;
-  type: 'email' | 'discord' | 'sms';
+  type: 'email' | 'discord' | 'sms' | 'webhook';
   config: Record<string, unknown>;
 }) {
   const integration = await prisma.integration.create({
@@ -45,7 +45,7 @@ export async function createIntegration(data: {
   return {
     id: integration.id,
     tenantId: integration.tenant_id,
-    type: integration.type as 'email' | 'discord' | 'sms',
+    type: integration.type as 'email' | 'discord' | 'sms' | 'webhook',
     config: integration.config as Record<string, unknown>,
     createdAt: integration.created_at,
     updatedAt: integration.updated_at,
@@ -68,7 +68,7 @@ export async function updateIntegration(
   return {
     id: updated.id,
     tenantId: updated.tenant_id,
-    type: updated.type as 'email' | 'discord' | 'sms',
+    type: updated.type as 'email' | 'discord' | 'sms' | 'webhook',
     config: updated.config as Record<string, unknown>,
     createdAt: updated.created_at,
     updatedAt: updated.updated_at,

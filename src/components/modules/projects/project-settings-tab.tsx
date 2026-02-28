@@ -3,6 +3,7 @@
 import React, { useState, useCallback } from 'react';
 import { trpc } from '@/utils/trpc';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -24,6 +25,14 @@ interface ProjectSettingsTabProps {
   dataSchema?: unknown;
   deliveryIntegrationIds: string[];
   conversationMode?: ConversationMode;
+  defaultRatingType?: 'thumbs' | 'nps';
+  businessHours?: Record<string, unknown> | null;
+  outOfOfficeMessage?: string;
+  queueOverflowMessage?: string;
+  slaEscalateMinutes?: number;
+  escalationKeywords?: string[];
+  proactiveDelaySeconds?: number;
+  proactiveOnExitIntent?: boolean;
 }
 
 export function ProjectSettingsTab({
@@ -31,12 +40,36 @@ export function ProjectSettingsTab({
   dataSchema,
   deliveryIntegrationIds,
   conversationMode: initialConversationMode = 'both',
+  defaultRatingType: initialDefaultRatingType = 'thumbs',
+  outOfOfficeMessage: initialOutOfOffice = '',
+  queueOverflowMessage: initialQueueOverflow = '',
+  slaEscalateMinutes: initialSlaMinutes,
+  escalationKeywords: initialEscalationKeywords = [],
+  proactiveDelaySeconds: initialProactiveDelay,
+  proactiveOnExitIntent: initialProactiveExit = false,
 }: ProjectSettingsTabProps) {
   const [serverError, setServerError] = useState<string | null>(null);
+  const [correlationId, setCorrelationId] = useState<string | null>(null);
   const [conversationMode, setConversationMode] = useState<ConversationMode>(initialConversationMode);
+  const [defaultRatingType, setDefaultRatingType] = useState<'thumbs' | 'nps'>(initialDefaultRatingType);
+  const [outOfOfficeMessage, setOutOfOfficeMessage] = useState(initialOutOfOffice);
+  const [queueOverflowMessage, setQueueOverflowMessage] = useState(initialQueueOverflow);
+  const [slaEscalateMinutes, setSlaEscalateMinutes] = useState<string>(initialSlaMinutes != null ? String(initialSlaMinutes) : '');
+  const [escalationKeywords, setEscalationKeywords] = useState<string>(initialEscalationKeywords.join(', '));
+  const [proactiveDelaySeconds, setProactiveDelaySeconds] = useState<string>(initialProactiveDelay != null ? String(initialProactiveDelay) : '');
+  const [proactiveOnExitIntent, setProactiveOnExitIntent] = useState(initialProactiveExit);
   React.useEffect(() => {
     setConversationMode(initialConversationMode);
   }, [initialConversationMode]);
+  React.useEffect(() => {
+    setDefaultRatingType(initialDefaultRatingType);
+    setOutOfOfficeMessage(initialOutOfOffice);
+    setQueueOverflowMessage(initialQueueOverflow);
+    setSlaEscalateMinutes(initialSlaMinutes != null ? String(initialSlaMinutes) : '');
+    setEscalationKeywords(initialEscalationKeywords.join(', '));
+    setProactiveDelaySeconds(initialProactiveDelay != null ? String(initialProactiveDelay) : '');
+    setProactiveOnExitIntent(initialProactiveExit);
+  }, [initialDefaultRatingType, initialOutOfOffice, initialQueueOverflow, initialSlaMinutes, initialEscalationKeywords, initialProactiveDelay, initialProactiveExit]);
   const [schemaText, setSchemaText] = useState(
     typeof dataSchema === 'object' && dataSchema !== null
       ? JSON.stringify(dataSchema, null, 2)
@@ -48,9 +81,20 @@ export function ProjectSettingsTab({
   const updateProject = trpc.projects.update.useMutation({
     onSuccess: (data) => {
       setServerError(null);
+      setCorrelationId(null);
       if (data?.conversationMode) setConversationMode(data.conversationMode);
+      if (data?.defaultRatingType != null) setDefaultRatingType(data.defaultRatingType);
+      if (data?.outOfOfficeMessage != null) setOutOfOfficeMessage(data.outOfOfficeMessage ?? '');
+      if (data?.queueOverflowMessage != null) setQueueOverflowMessage(data.queueOverflowMessage ?? '');
+      if (data?.slaEscalateMinutes != null) setSlaEscalateMinutes(String(data.slaEscalateMinutes));
+      if (data?.escalationKeywords) setEscalationKeywords(data.escalationKeywords.join(', '));
+      if (data?.proactiveDelaySeconds != null) setProactiveDelaySeconds(String(data.proactiveDelaySeconds));
+      if (data?.proactiveOnExitIntent != null) setProactiveOnExitIntent(data.proactiveOnExitIntent);
     },
-    onError: (err) => setServerError(err.message),
+    onError: (err) => {
+      setServerError(err.message);
+      setCorrelationId((err as { data?: { correlationId?: string } }).data?.correlationId ?? null);
+    },
   });
 
   const parsedSchema = React.useMemo(() => {
@@ -67,6 +111,7 @@ export function ProjectSettingsTab({
 
   const handleSaveSchema = () => {
     setServerError(null);
+    setCorrelationId(null);
     let parsed: unknown;
     try {
       parsed = JSON.parse(schemaText);
@@ -82,6 +127,7 @@ export function ProjectSettingsTab({
 
   const handleSaveDelivery = () => {
     setServerError(null);
+    setCorrelationId(null);
     updateProject.mutate({
       id: projectId,
       deliveryIntegrationIds: selectedIds,
@@ -96,9 +142,31 @@ export function ProjectSettingsTab({
 
   const handleSaveConversationMode = () => {
     setServerError(null);
+    setCorrelationId(null);
     updateProject.mutate({
       id: projectId,
       conversationMode,
+    });
+  };
+
+  const handleSaveBehavior = () => {
+    setServerError(null);
+    setCorrelationId(null);
+    const sla = slaEscalateMinutes.trim() === '' ? null : parseInt(slaEscalateMinutes, 10);
+    const proactive = proactiveDelaySeconds.trim() === '' ? null : parseInt(proactiveDelaySeconds, 10);
+    const keywords = escalationKeywords
+      .split(/,\s*/)
+      .map((k) => k.trim())
+      .filter(Boolean);
+    updateProject.mutate({
+      id: projectId,
+      defaultRatingType,
+      outOfOfficeMessage: outOfOfficeMessage || null,
+      queueOverflowMessage: queueOverflowMessage || null,
+      slaEscalateMinutes: sla ?? undefined,
+      escalationKeywords: keywords.length ? keywords : null,
+      proactiveDelaySeconds: proactive ?? undefined,
+      proactiveOnExitIntent,
     });
   };
 
@@ -107,7 +175,18 @@ export function ProjectSettingsTab({
       {serverError && (
         <Alert variant="destructive">
           <AlertTitle>Error</AlertTitle>
-          <AlertDescription>{serverError}</AlertDescription>
+          <AlertDescription>
+            {serverError}
+            {correlationId && (
+              <span
+                className="ml-2 text-xs cursor-pointer underline underline-offset-2"
+                title="Copy correlation ID"
+                onClick={() => void navigator.clipboard.writeText(correlationId)}
+              >
+                (ID: {correlationId})
+              </span>
+            )}
+          </AlertDescription>
         </Alert>
       )}
 
@@ -137,6 +216,95 @@ export function ProjectSettingsTab({
             {updateProject.isPending ? 'Saving…' : 'Save'}
           </Button>
         </div>
+      </div>
+
+      <div className="rounded-lg border bg-card p-6 space-y-4">
+        <h3 className="font-semibold">Behavior</h3>
+        <p className="text-sm text-muted-foreground">
+          Rating type, availability messages, SLA escalation, and proactive chat.
+        </p>
+        <div className="grid gap-4 max-w-xl">
+          <div>
+            <Label>Widget rating type</Label>
+            <Select
+              value={defaultRatingType}
+              onValueChange={(v) => setDefaultRatingType(v as 'thumbs' | 'nps')}
+            >
+              <SelectTrigger className="w-[200px] mt-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="thumbs">Thumbs up/down</SelectItem>
+                <SelectItem value="nps">NPS (0–10)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Out of office message</Label>
+            <Textarea
+              className="mt-1"
+              placeholder="We are currently outside business hours."
+              value={outOfOfficeMessage}
+              onChange={(e) => setOutOfOfficeMessage(e.target.value)}
+              rows={2}
+            />
+          </div>
+          <div>
+            <Label>Queue overflow message</Label>
+            <Textarea
+              className="mt-1"
+              placeholder="No agents available. Please try again later."
+              value={queueOverflowMessage}
+              onChange={(e) => setQueueOverflowMessage(e.target.value)}
+              rows={2}
+            />
+          </div>
+          <div>
+            <Label>SLA escalate (minutes)</Label>
+            <Input
+              type="number"
+              min={0}
+              className="mt-1 w-24"
+              placeholder="e.g. 5"
+              value={slaEscalateMinutes}
+              onChange={(e) => setSlaEscalateMinutes(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground mt-1">Auto handoff if no first response within this many minutes.</p>
+          </div>
+          <div>
+            <Label>Escalation keywords</Label>
+            <Input
+              className="mt-1"
+              placeholder="manager, human, complaint"
+              value={escalationKeywords}
+              onChange={(e) => setEscalationKeywords(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground mt-1">Comma-separated; if customer message contains any, handoff is requested.</p>
+          </div>
+          <div>
+            <Label>Proactive delay (seconds)</Label>
+            <Input
+              type="number"
+              min={0}
+              className="mt-1 w-24"
+              placeholder="0 = disabled"
+              value={proactiveDelaySeconds}
+              onChange={(e) => setProactiveDelaySeconds(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground mt-1">Open widget automatically after this many seconds on page.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="proactive-exit"
+              checked={proactiveOnExitIntent}
+              onCheckedChange={(c) => setProactiveOnExitIntent(!!c)}
+            />
+            <label htmlFor="proactive-exit" className="text-sm font-medium">Proactive on exit intent</label>
+          </div>
+        </div>
+        <Button onClick={handleSaveBehavior} disabled={updateProject.isPending} className="mt-2">
+          {updateProject.isPending ? 'Saving…' : 'Save behavior'}
+        </Button>
       </div>
 
       <div className="rounded-lg border bg-card p-6 space-y-4">
@@ -201,9 +369,9 @@ export function ProjectSettingsTab({
                   className="text-sm font-medium capitalize"
                 >
                   {i.type}
-                  {'webhookUrl' in i.config && (
+                  {('webhookUrl' in i.config || 'url' in i.config) && (
                     <span className="text-muted-foreground font-normal ml-1">
-                      — {String(i.config.webhookUrl).slice(0, 30)}…
+                      — {String((i.config as { webhookUrl?: string; url?: string }).webhookUrl ?? (i.config as { url?: string }).url ?? '').slice(0, 30)}…
                     </span>
                   )}
                 </label>

@@ -1,15 +1,13 @@
 import { NextResponse } from 'next/server';
-import { getIronSession } from 'iron-session';
-import { cookies } from 'next/headers';
-import { sessionOptions, type SessionData } from '@/lib/session';
+import { getValidatedSessionUser } from '@/server/session-validation';
 import { getUploadService } from '@/server/upload/upload-service';
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MB for logos
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
 
 export async function POST(request: Request) {
-  const session = await getIronSession<SessionData>(await cookies(), sessionOptions);
-  if (!session.user) {
+  const user = await getValidatedSessionUser();
+  if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

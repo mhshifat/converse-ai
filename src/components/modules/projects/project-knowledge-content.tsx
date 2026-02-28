@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
+import { toastTrpcError } from '@/lib/toast-error';
 import { trpc } from '@/utils/trpc';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,7 +25,8 @@ import {
   EmptyDescription,
   EmptyContent,
 } from '@/components/ui/empty';
-import { BookOpen, FileUp, Plus, Trash2, Link as LinkIcon, Globe } from 'lucide-react';
+import { BookOpen, FileUp, Plus, Trash2, Link as LinkIcon, Globe, RefreshCw, Sparkles } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 
 interface ProjectKnowledgeContentProps {
   projectId: string;
@@ -43,8 +45,25 @@ export function ProjectKnowledgeContent({ projectId }: ProjectKnowledgeContentPr
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const utils = trpc.useUtils();
+  const { data: project } = trpc.projects.getById.useQuery({ id: projectId });
   const { data: items, isLoading } = trpc.projectKnowledge.list.useQuery({ projectId });
   const { data: currentUrl } = trpc.projectKnowledge.getExternalUrl.useQuery({ projectId });
+
+  const updateProjectMutation = trpc.projects.update.useMutation({
+    onSuccess: () => void utils.projects.getById.invalidate({ id: projectId }),
+  });
+  const reindexRagMutation = trpc.projectKnowledge.reindexRag.useMutation({
+    onSuccess: (data) => {
+      if (data.ragUnavailable) {
+        toast.info(
+          'RAG is not available in this environment (pgvector / knowledge_chunk table is required). Use Neon or install pgvector locally.'
+        );
+      } else {
+        toast.success(`RAG reindexed. ${data.chunksCreated} chunks created.`);
+      }
+    },
+    onError: (err) => toastTrpcError(err),
+  });
 
   useEffect(() => {
     if (currentUrl !== undefined) setExternalUrl(currentUrl ?? '');
@@ -60,6 +79,15 @@ export function ProjectKnowledgeContent({ projectId }: ProjectKnowledgeContentPr
   });
   const removeMutation = trpc.projectKnowledge.remove.useMutation({
     onSuccess: () => utils.projectKnowledge.list.invalidate({ projectId }),
+  });
+  const reIngestMutation = trpc.projectKnowledge.reIngest.useMutation({
+    onSuccess: (data) => {
+      if (data.success) {
+        toast.success('Re-ingested successfully');
+        utils.projectKnowledge.list.invalidate({ projectId });
+      }
+    },
+    onError: (err) => toastTrpcError(err),
   });
   const setUrlMutation = trpc.projectKnowledge.setExternalUrl.useMutation({
     onSuccess: () => {
@@ -139,6 +167,42 @@ export function ProjectKnowledgeContent({ projectId }: ProjectKnowledgeContentPr
 
   return (
     <div className="space-y-8">
+      {/* RAG / vector search */}
+      <div className="rounded-xl border border-border/60 bg-card p-5">
+        <h3 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+          <Sparkles className="size-4" />
+          Vector search (RAG)
+        </h3>
+        <p className="text-muted-foreground text-sm max-w-2xl mb-4">
+          When enabled, the agent uses Groq embeddings to find only the most relevant knowledge chunks for each message instead of loading all entries. Best for large knowledge bases.
+        </p>
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Switch
+              id="use-rag"
+              checked={project?.useRag ?? false}
+              onCheckedChange={(checked) => {
+                updateProjectMutation.mutate({ id: projectId, useRag: checked });
+              }}
+              disabled={updateProjectMutation.isPending}
+            />
+            <Label htmlFor="use-rag" className="cursor-pointer">Use RAG / vector search</Label>
+          </div>
+          {(project?.useRag ?? false) && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => reindexRagMutation.mutate({ projectId })}
+              disabled={reindexRagMutation.isPending}
+              className="gap-2"
+            >
+              <RefreshCw className={reindexRagMutation.isPending ? 'size-4 animate-spin' : 'size-4'} />
+              {reindexRagMutation.isPending ? 'Reindexing…' : 'Reindex all for RAG'}
+            </Button>
+          )}
+        </div>
+      </div>
+
       {/* How it works */}
       <div className="rounded-xl border border-border/60 bg-muted/20 p-5">
         <h2 className="text-sm font-semibold text-foreground mb-2">How knowledge is used</h2>
@@ -329,19 +393,50 @@ export function ProjectKnowledgeContent({ projectId }: ProjectKnowledgeContentPr
                   <p className="text-muted-foreground text-sm mt-0.5 line-clamp-3">
                     {item.content}
                   </p>
+                  {(item.sourceType === 'url' || item.sourceType === 'file') && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Source: {item.sourceType === 'url' ? 'URL' : 'File'}
+                      {item.sourceRef && ` · ${item.sourceRef}`}
+                    </p>
+                  )}
                 </button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="text-muted-foreground hover:text-destructive shrink-0"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    removeMutation.mutate({ projectId, id: item.id });
-                  }}
-                  disabled={removeMutation.isPending}
-                >
-                  <Trash2 className="size-4" />
-                </Button>
+                <div className="flex items-center gap-1 shrink-0">
+                  {item.sourceType === 'url' && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-muted-foreground hover:text-foreground"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        reIngestMutation.mutate({ projectId, id: item.id });
+                      }}
+                      disabled={reIngestMutation.isPending}
+                      title="Re-fetch URL and update content"
+                    >
+                      <RefreshCw className={reIngestMutation.isPending ? 'size-4 animate-spin' : 'size-4'} />
+                    </Button>
+                  )}
+                  {item.sourceType === 'file' && (
+                    <span
+                      className="text-muted-foreground text-xs px-2"
+                      title="Re-upload the file to refresh"
+                    >
+                      Re-upload to refresh
+                    </span>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-muted-foreground hover:text-destructive shrink-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeMutation.mutate({ projectId, id: item.id });
+                    }}
+                    disabled={removeMutation.isPending}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
               </div>
             ))}
           </div>

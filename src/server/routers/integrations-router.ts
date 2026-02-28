@@ -16,6 +16,10 @@ const configByType = {
     to: z.string().optional(),
     from: z.string().optional(),
   }),
+  webhook: z.object({
+    url: z.string().url(),
+    events: z.array(z.enum(['conversation.created', 'message.sent'])).optional(),
+  }),
 };
 
 export const integrationsRouter = router({
@@ -41,7 +45,7 @@ export const integrationsRouter = router({
   create: protectedProcedure
     .input(
       z.object({
-        type: z.enum(['email', 'discord', 'sms']),
+        type: z.enum(['email', 'discord', 'sms', 'webhook']),
         config: z.record(z.string(), z.unknown()),
       })
     )

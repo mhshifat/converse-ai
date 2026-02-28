@@ -1,8 +1,6 @@
 import { appRouter } from '../../../../server/routers/app-router';
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
-import { getIronSession } from 'iron-session';
-import { cookies } from 'next/headers';
-import { sessionOptions } from '../../../../lib/session';
+import { getValidatedSessionUser } from '../../../../server/session-validation';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -18,11 +16,9 @@ const handler = async (req: Request) => {
     endpoint: '/api/trpc',
     req,
     router: appRouter,
-    createContext: async () => {
-      const cookieStore = await cookies();
-      const session = await getIronSession(cookieStore, sessionOptions);
-      return { user: session.user ?? null };
-    },
+    createContext: async () => ({
+      user: await getValidatedSessionUser(),
+    }),
   });
   const headers = new Headers(res.headers);
   Object.entries(CORS_HEADERS).forEach(([k, v]) => headers.set(k, v));

@@ -3,6 +3,19 @@ import type { AgentProvider } from './agent-provider';
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const DEFAULT_MODEL = 'llama-3.3-70b-versatile';
+const MAX_RETRIES = 3;
+
+function retryDelay(attempt: number, retryAfterHeader?: string | null): number {
+  if (retryAfterHeader) {
+    const seconds = parseFloat(retryAfterHeader);
+    if (!isNaN(seconds) && seconds > 0 && seconds <= 60) return seconds * 1000;
+  }
+  return Math.min(1000 * 2 ** attempt, 15000);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export class GroqAgentProvider implements AgentProvider {
   private apiKey: string;
@@ -39,33 +52,46 @@ export class GroqAgentProvider implements AgentProvider {
       { role: 'user', content: prompt },
     ];
 
-    const res = await fetch(GROQ_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        max_tokens: 1024,
-        temperature: 0.7,
-      }),
+    const body = JSON.stringify({
+      model,
+      messages,
+      max_tokens: 1024,
+      temperature: 0.7,
     });
 
-    if (!res.ok) {
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      const res = await fetch(GROQ_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        body,
+      });
+
+      if (res.ok) {
+        const data = (await res.json()) as {
+          choices?: Array<{ message?: { content?: string } }>;
+        };
+        const content =
+          data.choices?.[0]?.message?.content?.trim() ?? 'I could not generate a response.';
+        return { response: content };
+      }
+
+      if (res.status === 429 && attempt < MAX_RETRIES) {
+        const wait = retryDelay(attempt, res.headers.get('retry-after'));
+        console.warn(`[Groq] Rate limited (429). Retrying in ${wait}ms (attempt ${attempt + 1}/${MAX_RETRIES})...`);
+        await sleep(wait);
+        continue;
+      }
+
       const err = await res.text();
       console.error(`[Groq] API error ${res.status}:`, err);
       return {
-        response: 'Sorry, I had trouble responding.',
+        response: 'Sorry, I had trouble responding. Please try again in a moment.',
       };
     }
 
-    const data = (await res.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
-    };
-    const content =
-      data.choices?.[0]?.message?.content?.trim() ?? 'I could not generate a response.';
-    return { response: content };
+    return { response: 'Sorry, I had trouble responding. Please try again in a moment.' };
   }
 }

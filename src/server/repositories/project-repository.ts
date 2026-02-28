@@ -71,6 +71,15 @@ export async function getProjectById(projectId: string, tenantId: string) {
     dataSchema: project.data_schema,
     deliveryIntegrationIds: project.delivery_integration_ids,
     conversationMode: (project.conversation_mode as 'human_only' | 'ai_only' | 'both') ?? 'both',
+    useRag: project.use_rag ?? false,
+    defaultRatingType: (project.default_rating_type as 'thumbs' | 'nps') ?? 'thumbs',
+    businessHours: project.business_hours as Record<string, unknown> | null,
+    outOfOfficeMessage: project.out_of_office_message,
+    queueOverflowMessage: project.queue_overflow_message,
+    slaEscalateMinutes: project.sla_escalate_minutes,
+    escalationKeywords: (project.escalation_keywords as string[] | null) ?? null,
+    proactiveDelaySeconds: project.proactive_delay_seconds,
+    proactiveOnExitIntent: project.proactive_on_exit_intent ?? false,
     createdAt: project.created_at,
     updatedAt: project.updated_at,
     chatbots: project.chatbots.map((c) => ({
@@ -122,6 +131,15 @@ export async function updateProject(
     dataSchema?: unknown;
     deliveryIntegrationIds?: string[];
     conversationMode?: 'human_only' | 'ai_only' | 'both';
+    useRag?: boolean;
+    defaultRatingType?: 'thumbs' | 'nps';
+    businessHours?: Record<string, unknown> | null;
+    outOfOfficeMessage?: string | null;
+    queueOverflowMessage?: string | null;
+    slaEscalateMinutes?: number | null;
+    escalationKeywords?: string[] | null;
+    proactiveDelaySeconds?: number | null;
+    proactiveOnExitIntent?: boolean;
   }
 ) {
   const project = await prisma.project.findFirst({
@@ -140,6 +158,15 @@ export async function updateProject(
         delivery_integration_ids: data.deliveryIntegrationIds,
       }),
       ...(data.conversationMode !== undefined && { conversation_mode: data.conversationMode }),
+      ...(data.useRag !== undefined && { use_rag: data.useRag }),
+      ...(data.defaultRatingType !== undefined && { default_rating_type: data.defaultRatingType }),
+      ...(data.businessHours !== undefined && { business_hours: data.businessHours }),
+      ...(data.outOfOfficeMessage !== undefined && { out_of_office_message: data.outOfOfficeMessage }),
+      ...(data.queueOverflowMessage !== undefined && { queue_overflow_message: data.queueOverflowMessage }),
+      ...(data.slaEscalateMinutes !== undefined && { sla_escalate_minutes: data.slaEscalateMinutes }),
+      ...(data.escalationKeywords !== undefined && { escalation_keywords: data.escalationKeywords }),
+      ...(data.proactiveDelaySeconds !== undefined && { proactive_delay_seconds: data.proactiveDelaySeconds }),
+      ...(data.proactiveOnExitIntent !== undefined && { proactive_on_exit_intent: data.proactiveOnExitIntent }),
     },
   });
   return {
@@ -151,6 +178,15 @@ export async function updateProject(
     dataSchema: updated.data_schema,
     deliveryIntegrationIds: updated.delivery_integration_ids,
     conversationMode: (updated.conversation_mode as 'human_only' | 'ai_only' | 'both') ?? 'both',
+    useRag: updated.use_rag ?? false,
+    defaultRatingType: (updated.default_rating_type as 'thumbs' | 'nps') ?? 'thumbs',
+    businessHours: updated.business_hours as Record<string, unknown> | null,
+    outOfOfficeMessage: updated.out_of_office_message,
+    queueOverflowMessage: updated.queue_overflow_message,
+    slaEscalateMinutes: updated.sla_escalate_minutes,
+    escalationKeywords: (updated.escalation_keywords as string[] | null) ?? null,
+    proactiveDelaySeconds: updated.proactive_delay_seconds,
+    proactiveOnExitIntent: updated.proactive_on_exit_intent ?? false,
     createdAt: updated.created_at,
     updatedAt: updated.updated_at,
   };

@@ -72,12 +72,53 @@ export async function getConversationById(conversationId: string, tenantId: stri
     chatbotName: conversation.chatbot.name,
     handoffRequestedAt: conversation.handoff_requested_at,
     assignedHumanAgentId: conversation.assigned_human_agent_id,
+    internalNotes: conversation.internal_notes,
+    ratingType: conversation.rating_type,
+    ratingValue: conversation.rating_value,
     messages: conversation.messages.map((m) => ({
       id: m.id,
       senderType: m.sender_type as 'customer' | 'agent' | 'human_agent',
       senderId: m.sender_id,
       content: m.content,
+      payload: m.payload as Record<string, unknown> | null,
       createdAt: m.created_at,
     })),
   };
+}
+
+export async function setRating(
+  conversationId: string,
+  data: { ratingType: 'thumbs' | 'nps'; ratingValue: number }
+): Promise<boolean> {
+  const conv = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    select: { id: true, status: true },
+  });
+  if (!conv || conv.status !== 'closed') return false;
+  await prisma.conversation.update({
+    where: { id: conversationId },
+    data: {
+      rating_type: data.ratingType,
+      rating_value: data.ratingValue,
+      rated_at: new Date(),
+    },
+  });
+  return true;
+}
+
+export async function setInternalNotes(
+  conversationId: string,
+  tenantId: string,
+  internalNotes: string | null
+): Promise<boolean> {
+  const conv = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    include: { chatbot: { include: { project: { select: { tenant_id: true } } } } },
+  });
+  if (!conv || conv.chatbot.project.tenant_id !== tenantId) return false;
+  await prisma.conversation.update({
+    where: { id: conversationId },
+    data: { internal_notes: internalNotes },
+  });
+  return true;
 }

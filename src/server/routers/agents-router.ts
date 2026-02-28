@@ -81,4 +81,31 @@ export const agentsRouter = router({
         return { success: true };
       });
     }),
+
+  listVersions: protectedProcedure
+    .input(z.object({ agentId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      return withCorrelationError('agents.listVersions', async () => {
+        return agentRepo.listAgentVersions(input.agentId, ctx.user.tenantId);
+      });
+    }),
+
+  rollback: protectedProcedure
+    .input(
+      z.object({
+        agentId: z.string().uuid(),
+        version: z.number().int().min(1),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      return withCorrelationError('agents.rollback', async (correlationId) => {
+        const ok = await agentRepo.rollbackAgentToVersion(
+          input.agentId,
+          input.version,
+          ctx.user.tenantId
+        );
+        if (!ok) throwNotFoundWithId(correlationId, 'Agent or version not found');
+        return { success: true };
+      });
+    }),
 });

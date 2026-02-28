@@ -65,6 +65,8 @@ export interface ChatbotWidgetConfig {
   voiceEnabled: boolean;
   /** Show "Powered by ConverseAI" link in widget footer. Default true for attribution/marketing. */
   showPoweredBy: boolean;
+  /** Rating after conversation: 'thumbs' (up/down) or 'nps' (0-10). */
+  defaultRatingType: 'thumbs' | 'nps';
   bubble: BubbleConfig;
   popup: PopupConfig;
   header: HeaderConfig;
@@ -127,6 +129,7 @@ export const DEFAULT_WIDGET_CONFIG: ChatbotWidgetConfig = {
   welcomeMessage: 'How can I help you today?',
   voiceEnabled: false,
   showPoweredBy: true,
+  defaultRatingType: 'thumbs',
   bubble: defaultBubble,
   popup: defaultPopup,
   header: defaultHeader,
@@ -145,6 +148,7 @@ export function mergeWidgetConfig(
     welcomeMessage: (c.welcomeMessage as string) ?? DEFAULT_WIDGET_CONFIG.welcomeMessage,
     voiceEnabled: (c.voiceEnabled as boolean) ?? DEFAULT_WIDGET_CONFIG.voiceEnabled,
     showPoweredBy: (c.showPoweredBy as boolean) ?? DEFAULT_WIDGET_CONFIG.showPoweredBy,
+    defaultRatingType: (c.defaultRatingType as 'thumbs' | 'nps') ?? DEFAULT_WIDGET_CONFIG.defaultRatingType,
     bubble: { ...defaultBubble, ...(c.bubble as Partial<BubbleConfig>) },
     popup: { ...defaultPopup, ...(c.popup as Partial<PopupConfig>) },
     header: { ...defaultHeader, ...(c.header as Partial<HeaderConfig>) },
@@ -161,6 +165,7 @@ export function widgetConfigToStorage(config: ChatbotWidgetConfig): Record<strin
     welcomeMessage: config.welcomeMessage,
     voiceEnabled: config.voiceEnabled,
     showPoweredBy: config.showPoweredBy,
+    defaultRatingType: config.defaultRatingType,
     bubble: config.bubble,
     popup: config.popup,
     header: config.header,

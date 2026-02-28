@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
+import { toastTrpcError } from '@/lib/toast-error';
 import { trpc } from '@/utils/trpc';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -39,6 +40,7 @@ export function ProjectDeliveryIntegrations({
   deliveryIntegrationIds,
 }: ProjectDeliveryIntegrationsProps) {
   const [serverError, setServerError] = useState<string | null>(null);
+  const [correlationId, setCorrelationId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>(deliveryIntegrationIds);
   React.useEffect(() => {
     setSelectedIds(deliveryIntegrationIds);
@@ -49,9 +51,13 @@ export function ProjectDeliveryIntegrations({
   const updateProject = trpc.projects.update.useMutation({
     onSuccess: () => {
       setServerError(null);
+      setCorrelationId(null);
       void utils.projects.getById.invalidate({ id: projectId });
     },
-    onError: (err) => setServerError(err.message),
+    onError: (err) => {
+      setServerError(err.message);
+      setCorrelationId((err as { data?: { correlationId?: string } }).data?.correlationId ?? null);
+    },
   });
 
   const sendTestDelivery = trpc.projects.sendTestDelivery.useMutation({
@@ -63,12 +69,13 @@ export function ProjectDeliveryIntegrations({
       );
     },
     onError: (err) => {
-      toast.error(err.message ?? 'Test delivery failed.');
+      toastTrpcError(err, 'Test delivery failed.');
     },
   });
 
   const handleSave = () => {
     setServerError(null);
+    setCorrelationId(null);
     updateProject.mutate({
       id: projectId,
       deliveryIntegrationIds: selectedIds,
@@ -96,7 +103,18 @@ export function ProjectDeliveryIntegrations({
       {serverError && (
         <Alert variant="destructive">
           <AlertTitle>Error</AlertTitle>
-          <AlertDescription>{serverError}</AlertDescription>
+          <AlertDescription>
+            {serverError}
+            {correlationId && (
+              <span
+                className="ml-2 text-xs cursor-pointer underline underline-offset-2"
+                title="Copy correlation ID"
+                onClick={() => void navigator.clipboard.writeText(correlationId)}
+              >
+                (ID: {correlationId})
+              </span>
+            )}
+          </AlertDescription>
         </Alert>
       )}
 

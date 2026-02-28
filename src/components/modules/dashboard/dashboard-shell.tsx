@@ -40,6 +40,8 @@ import {
   MessageCircle,
   UserCircle,
   Bell,
+  Reply,
+  BarChart3,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { DashboardBackground } from './dashboard-bg';
@@ -74,10 +76,10 @@ export function DashboardShell({ userEmail, children }: DashboardShellProps) {
     onSuccess: () => router.push('/login'),
   });
 
-  const { data: handoffData } = trpc.liveChat.listHandoffConversations.useQuery(
-    undefined,
-    { refetchInterval: 8000 }
-  );
+  const { data: handoffData } = trpc.liveChat.listHandoffConversations.useQuery(undefined, {
+    refetchInterval: 8000,
+    staleTime: 4000,
+  });
   const unassigned = handoffData?.unassigned ?? [];
   const prevUnassignedIdsRef = useRef<Set<string>>(new Set());
   const isFirstLoadRef = useRef(true);
@@ -129,8 +131,10 @@ export function DashboardShell({ userEmail, children }: DashboardShellProps) {
 
   const { data: currentProject } = trpc.projects.getById.useQuery(
     { id: projectId! },
-    { enabled: !!projectId }
+    { enabled: !!projectId, staleTime: 30_000, retry: false }
   );
+
+  const showProjectSidebar = !!currentProject;
 
   function isActive(href: string) {
     if (href === '/dashboard') return pathname === '/dashboard';
@@ -145,6 +149,7 @@ export function DashboardShell({ userEmail, children }: DashboardShellProps) {
   const projectSubNav = projectId
     ? [
         { href: `/projects/${projectId}`, label: 'Overview', icon: Home },
+        { href: `/projects/${projectId}/analytics`, label: 'Analytics', icon: BarChart3 },
         { href: `/projects/${projectId}/conversations`, label: 'Conversations', icon: MessageSquare },
         { href: `/projects/${projectId}/playground`, label: 'Playground', icon: Play },
         { href: `/projects/${projectId}/agents`, label: 'Agents', icon: Bot },
@@ -152,13 +157,14 @@ export function DashboardShell({ userEmail, children }: DashboardShellProps) {
         { href: `/projects/${projectId}/integrations`, label: 'Integrations', icon: Plug },
         { href: `/projects/${projectId}/live-chat`, label: 'Live chat', icon: MessageCircle },
         { href: `/projects/${projectId}/human-agents`, label: 'Human agents', icon: UserCircle },
+        { href: `/projects/${projectId}/canned-responses`, label: 'Quick replies', icon: Reply },
       ]
     : null;
 
   const mainContent = (
     <>
       <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center gap-3 border-b border-border/60 bg-background/80 px-6 backdrop-blur-lg">
-        {projectId ? (
+        {showProjectSidebar ? (
           <SidebarTrigger className="-ml-1.5 size-8 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground" />
         ) : null}
         <div className="hidden sm:flex items-center gap-2 rounded-lg border border-border/60 bg-muted/40 px-3 py-1.5 text-sm text-muted-foreground">
@@ -249,7 +255,7 @@ export function DashboardShell({ userEmail, children }: DashboardShellProps) {
   return (
     <div className="dashboard-with-primary-sidebar flex min-h-svh w-full">
       <PrimarySidebar />
-      {projectId ? (
+      {showProjectSidebar ? (
         <SidebarProvider className="md:ml-16 flex-1 min-w-0">
           <Sidebar variant="sidebar" collapsible="icon">
             <SidebarHeader className="px-5 pt-6 pb-4">
@@ -316,7 +322,7 @@ export function DashboardShell({ userEmail, children }: DashboardShellProps) {
                               className={cn(
                                 'relative flex items-center gap-3 rounded-xl px-3 py-2 text-[13px] font-medium transition-all duration-200',
                                 active
-                                  ? 'bg-foreground! text-background! shadow-sm data-[active=true]:bg-foreground! data-[active=true]:text-background!'
+                                  ? 'bg-primary text-primary-foreground shadow-sm hover:bg-primary/90'
                                   : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                               )}
                             >
@@ -325,7 +331,6 @@ export function DashboardShell({ userEmail, children }: DashboardShellProps) {
                                   'size-[18px] shrink-0',
                                   active ? 'opacity-100' : 'text-muted-foreground'
                                 )}
-                                style={active ? { color: 'hsl(var(--background))' } : undefined}
                               />
                               <span>{item.label}</span>
                             </Link>
@@ -338,7 +343,7 @@ export function DashboardShell({ userEmail, children }: DashboardShellProps) {
               </SidebarGroup>
             </SidebarContent>
           </Sidebar>
-          <SidebarInset>{mainContent}</SidebarInset>
+          <SidebarInset className="bg-transparent">{mainContent}</SidebarInset>
         </SidebarProvider>
       ) : (
         <main className="md:ml-16 flex-1 min-w-0 flex flex-col">

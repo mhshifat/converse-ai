@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { router, protectedProcedure } from '@/server/trpc';
 import { withCorrelationError, throwNotFoundWithId } from '@/server/trpc-error';
+import { prisma } from '@/lib/prisma';
 import * as projectRepo from '../repositories/project-repository';
 import * as conversationService from '../services/conversation-service';
 
@@ -45,9 +46,14 @@ export const projectsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      return withCorrelationError('projects.create', async () => {
+      return withCorrelationError('projects.create', async (correlationId) => {
+        const user = await prisma.user.findUnique({
+          where: { id: ctx.user.id },
+          select: { tenant_id: true },
+        });
+        if (!user) throwNotFoundWithId(correlationId, 'User not found');
         return projectRepo.createProject({
-          tenantId: ctx.user.tenantId,
+          tenantId: user.tenant_id,
           name: input.name,
           description: input.description,
           icon: input.icon ?? null,
@@ -65,6 +71,15 @@ export const projectsRouter = router({
         dataSchema: z.unknown().optional(),
         deliveryIntegrationIds: z.array(z.string().uuid()).optional(),
         conversationMode: z.enum(['human_only', 'ai_only', 'both']).optional(),
+        useRag: z.boolean().optional(),
+        defaultRatingType: z.enum(['thumbs', 'nps']).optional(),
+        businessHours: z.record(z.unknown()).nullable().optional(),
+        outOfOfficeMessage: z.string().nullable().optional(),
+        queueOverflowMessage: z.string().nullable().optional(),
+        slaEscalateMinutes: z.number().int().min(0).nullable().optional(),
+        escalationKeywords: z.array(z.string()).nullable().optional(),
+        proactiveDelaySeconds: z.number().int().min(0).nullable().optional(),
+        proactiveOnExitIntent: z.boolean().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {

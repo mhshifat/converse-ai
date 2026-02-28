@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { ProjectIcon } from '@/lib/project-icons';
 import { CreateProjectDialog } from '@/components/modules/projects/create-project-dialog';
 import { ConverseLogo } from '@/components/shared/converse-logo';
-import { Plus } from 'lucide-react';
+import { Plus, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   Tooltip,
@@ -22,9 +22,10 @@ export function PrimarySidebar() {
   const pathname = usePathname();
   const [createOpen, setCreateOpen] = React.useState(false);
 
-  const { data, isLoading } = trpc.projects.list.useQuery({
-    pageSize: 50,
-  });
+  const { data, isLoading } = trpc.projects.list.useQuery(
+    { pageSize: 50 },
+    { staleTime: 60_000 }
+  );
 
   const projectId = React.useMemo(() => {
     const match = pathname.match(/^\/projects\/([a-f0-9-]+)/);
@@ -93,7 +94,24 @@ export function PrimarySidebar() {
           </div>
         )}
 
-        <div className="mt-auto pt-2">
+        <div className="mt-auto pt-2 flex flex-col items-center gap-1">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link
+                href="/contacts"
+                className={cn(
+                  'flex size-10 items-center justify-center rounded-xl border border-border/60 transition-colors hover:bg-muted',
+                  pathname === '/contacts' ? 'bg-muted border-foreground/20' : 'bg-background'
+                )}
+                aria-label="Contacts"
+              >
+                <Users className="size-5" />
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent side="right" className="text-xs">
+              Contacts
+            </TooltipContent>
+          </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button

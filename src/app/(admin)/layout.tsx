@@ -1,7 +1,5 @@
 import { redirect } from 'next/navigation';
-import { getIronSession } from 'iron-session';
-import { cookies } from 'next/headers';
-import { sessionOptions, type SessionData } from '@/lib/session';
+import { getValidatedSessionUser } from '@/server/session-validation';
 import { DashboardShell } from '@/components/modules/dashboard/dashboard-shell';
 
 export default async function DashboardLayout({
@@ -9,15 +7,14 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const cookieStore = await cookies();
-  const session = await getIronSession<SessionData>(cookieStore, sessionOptions);
-  if (!session.user) {
-    redirect('/login');
+  const user = await getValidatedSessionUser();
+  if (!user) {
+    redirect('/api/auth/clear-session?then=/login');
   }
 
   return (
     <main className='min-h-screen flex flex-col fixed inset-0 w-full'>
-      <DashboardShell userEmail={session.user.email}>
+      <DashboardShell userEmail={user.email}>
         {children}
       </DashboardShell>
     </main>

@@ -29,6 +29,30 @@ const EMBED_SCRIPT = `
       body: JSON.stringify({ json: input })
     }).then(function(r) { return r.json(); });
   }
+  function browserTtsFallback(text) {
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      var u = new SpeechSynthesisUtterance(text);
+      u.rate = 1; u.pitch = 1;
+      window.speechSynthesis.speak(u);
+    }
+  }
+  function playAgentSpeech(text) {
+    trpcMutate('widget.synthesizeSpeech', { apiKey: apiKey, text: text }).then(function(res) {
+      var data = res && res.result && res.result.data && res.result.data.json;
+      if (!data || !data.audioBase64) { browserTtsFallback(text); return; }
+      try {
+        var binary = atob(data.audioBase64);
+        var bytes = new Uint8Array(binary.length);
+        for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        var blob = new Blob([bytes], { type: 'audio/wav' });
+        var url = URL.createObjectURL(blob);
+        var audio = new Audio(url);
+        audio.onended = function() { URL.revokeObjectURL(url); };
+        audio.onerror = function() { URL.revokeObjectURL(url); browserTtsFallback(text); };
+        audio.play();
+      } catch (e) { browserTtsFallback(text); }
+    }).catch(function() { browserTtsFallback(text); });
+  }
 
   var conversationId = null;
   var mode = 'chat';
@@ -279,7 +303,10 @@ const EMBED_SCRIPT = `
       if (conversationId) {
         trpcMutate('widget.sendMessage', { conversationId: conversationId, content: text }).then(function(res) {
           var result = res && res.result && res.result.data && res.result.data.json;
-          if (result && result.response) appendMsg('agent', result.response);
+          if (result && result.response) {
+            appendMsg('agent', result.response);
+            if (voiceEnabled && mode === 'voice') playAgentSpeech(result.response);
+          }
           if (result && result.handoffRequested) {
             handoffMode = true;
             startHandoffPolling();
@@ -289,8 +316,15 @@ const EMBED_SCRIPT = `
       } else {
         trpcMutate('widget.sendFirstMessage', { apiKey: apiKey, customerId: customerId, channel: 'text', content: text }).then(function(res) {
           var result = res && res.result && res.result.data && res.result.data.json;
+          if (result && result.unavailable) {
+            appendMsg('agent', result.message || 'We are unable to take your message at the moment. Please try again later.');
+            return;
+          }
           if (result && result.conversationId) conversationId = result.conversationId;
-          if (result && result.response) appendMsg('agent', result.response);
+          if (result && result.response) {
+            appendMsg('agent', result.response);
+            if (voiceEnabled && mode === 'voice') playAgentSpeech(result.response);
+          }
           if (result && result.handoffRequested) {
             handoffMode = true;
             startHandoffPolling();
@@ -386,10 +420,22 @@ const EMBED_SCRIPT = `
         if (c.header) config.header = merge(c.header, config.header);
         if (c.footer) config.footer = merge(c.footer, config.footer);
         if (c.messages) config.messages = merge(c.messages, config.messages);
+        if (c.proactiveDelaySeconds != null) config.proactiveDelaySeconds = c.proactiveDelaySeconds;
+        if (c.proactiveOnExitIntent != null) config.proactiveOnExitIntent = c.proactiveOnExitIntent;
       }
     }
     render();
     if (openPanelOnLoad) openPanel();
+    if (config.proactiveDelaySeconds > 0) {
+      setTimeout(function() { if (root && !panel) openPanel(); }, config.proactiveDelaySeconds * 1000);
+    }
+    if (config.proactiveOnExitIntent) {
+      var exitIntentFired = false;
+      document.addEventListener('mouseout', function exitIntent(e) {
+        if (exitIntentFired) return;
+        if (!e.relatedTarget && e.clientY <= 0) { exitIntentFired = true; document.removeEventListener('mouseout', exitIntent); if (root && !panel) openPanel(); }
+      });
+    }
   }).catch(function() { render(); });
 })();
 `.replace(/\n\s+/g, '\n').trim();

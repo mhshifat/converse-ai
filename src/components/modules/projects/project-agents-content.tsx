@@ -45,6 +45,7 @@ export function ProjectAgentsContent({ projectId }: ProjectAgentsContentProps) {
   const [name, setName] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('');
   const [provider, setProvider] = useState<string>('groq');
+  const [model, setModel] = useState<string>('llama-3.3-70b-versatile');
   const [selectedAgentId, setSelectedAgentId] = useState<string>('');
 
   const utils = trpc.useUtils();
@@ -91,6 +92,7 @@ export function ProjectAgentsContent({ projectId }: ProjectAgentsContentProps) {
     setName('');
     setSystemPrompt('');
     setProvider('groq');
+    setModel('llama-3.3-70b-versatile');
     setSelectedAgentId('');
   };
 
@@ -99,7 +101,10 @@ export function ProjectAgentsContent({ projectId }: ProjectAgentsContentProps) {
     createAgentMutation.mutate({
       name: name.trim(),
       systemPrompt: systemPrompt.trim(),
-      settings: { provider: provider as 'groq' | 'openai' },
+      settings: {
+        provider: provider as 'groq' | 'openai',
+        model: model || undefined,
+      },
     });
     setDialogOpen(false);
   };
@@ -188,13 +193,37 @@ export function ProjectAgentsContent({ projectId }: ProjectAgentsContentProps) {
                   </div>
                   <div>
                     <Label>AI provider</Label>
-                    <Select value={provider} onValueChange={setProvider}>
+                    <Select value={provider} onValueChange={(v) => { setProvider(v); if (v === 'groq') setModel('llama-3.3-70b-versatile'); if (v === 'openai') setModel('gpt-4o-mini'); }}>
                       <SelectTrigger className="mt-1">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="groq">Groq</SelectItem>
                         <SelectItem value="openai">OpenAI</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Model</Label>
+                    <Select value={model} onValueChange={setModel}>
+                      <SelectTrigger className="mt-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {provider === 'groq' && (
+                          <>
+                            <SelectItem value="llama-3.3-70b-versatile">Llama 3.3 70B</SelectItem>
+                            <SelectItem value="llama-3.1-8b-instant">Llama 3.1 8B Instant</SelectItem>
+                            <SelectItem value="mixtral-8x7b-32768">Mixtral 8x7B</SelectItem>
+                          </>
+                        )}
+                        {provider === 'openai' && (
+                          <>
+                            <SelectItem value="gpt-4o">GPT-4o</SelectItem>
+                            <SelectItem value="gpt-4o-mini">GPT-4o mini</SelectItem>
+                            <SelectItem value="gpt-4-turbo">GPT-4 Turbo</SelectItem>
+                          </>
+                        )}
                       </SelectContent>
                     </Select>
                   </div>

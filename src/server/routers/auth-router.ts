@@ -8,6 +8,7 @@ import { handleError } from '../../lib/logging/error-utils';
 import { sessionOptions, type SessionData } from '../../lib/session';
 import { getIronSession } from 'iron-session';
 import { cookies } from 'next/headers';
+import { getValidatedSessionUser } from '../session-validation';
 import {
   createVerificationToken,
   sendVerificationEmail,
@@ -166,7 +167,7 @@ export const authRouter = router({
     return { success: true };
   }),
   me: publicProcedure.query(async () => {
-    const session = await getIronSession<SessionData>(await cookies(), sessionOptions);
-    return { user: session.user ?? null };
+    const user = await getValidatedSessionUser();
+    return { user };
   }),
 });

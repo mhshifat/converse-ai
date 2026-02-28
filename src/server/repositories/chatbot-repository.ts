@@ -16,11 +16,13 @@ export async function getChatbotByProjectId(projectId: string, tenantId: string)
   if (!project) return null;
   const chatbot = project.chatbots[0] ?? null;
   if (!chatbot) return null;
+  const cfg = chatbot.config as Record<string, unknown>;
+  const defaultRatingType = (project as { default_rating_type?: string }).default_rating_type === 'nps' ? 'nps' : 'thumbs';
   return {
     id: chatbot.id,
     projectId: chatbot.project_id,
     name: chatbot.name,
-    config: chatbot.config as Record<string, unknown>,
+    config: { ...cfg, defaultRatingType },
     apiKey: chatbot.api_key ?? undefined,
     createdAt: chatbot.created_at,
     updatedAt: chatbot.updated_at,

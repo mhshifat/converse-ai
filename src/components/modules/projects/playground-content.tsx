@@ -112,6 +112,10 @@ export function PlaygroundContent({ projectId }: PlaygroundContentProps) {
         If there’s no activity for a few minutes, the chat will ask if you have any other questions and then close automatically; you can also close with the X button. See the "Conversation details & transcript" section below after a conversation ends.
       </p>
 
+      <p className="text-xs text-muted-foreground">
+        To test voice: enable Voice in Chatbot → Customize, then use the Chat/Voice toggle below. Start call → speak → pause to get a reply → speak again; end call when done.
+      </p>
+
       {/* Widget preview */}
       <LiveChatbotPreview
         key={previewKey}

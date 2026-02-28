@@ -34,6 +34,14 @@ export default async function ProjectDetailPage({
             ? (project.delivery_integration_ids as string[])
             : undefined,
           conversationMode: (project.conversation_mode as 'human_only' | 'ai_only' | 'both') ?? 'both',
+          defaultRatingType: (project.default_rating_type as 'thumbs' | 'nps') ?? 'thumbs',
+          businessHours: project.business_hours as Record<string, unknown> | null,
+          outOfOfficeMessage: project.out_of_office_message ?? undefined,
+          queueOverflowMessage: project.queue_overflow_message ?? undefined,
+          slaEscalateMinutes: project.sla_escalate_minutes ?? undefined,
+          escalationKeywords: (project.escalation_keywords as string[] | null) ?? undefined,
+          proactiveDelaySeconds: project.proactive_delay_seconds ?? undefined,
+          proactiveOnExitIntent: project.proactive_on_exit_intent ?? false,
           createdAt: project.created_at,
           updatedAt: project.updated_at,
           chatbots: project.chatbots.map((c) => ({

@@ -1,19 +1,49 @@
 import * as projectKnowledgeRepo from '../repositories/project-knowledge-repository';
+import * as knowledgeChunkRepo from '../repositories/knowledge-chunk-repository';
+import * as embeddingService from './embedding-service';
+import { prisma } from '@/lib/prisma';
 
 const EXTERNAL_FETCH_TIMEOUT_MS = 8000;
 const MAX_EXTERNAL_LENGTH = 15000;
+const RAG_TOP_K = 10;
 
 /**
  * Builds the extra context string to inject into the agent's system prompt:
- * - All project knowledge entries from the database (FAQs, product info, etc.)
- * - Optional: content fetched from project's knowledge_base_url (external API/docs)
+ * - If project.use_rag and query is provided: vector search (RAG) with relevant chunks only.
+ * - Otherwise: full project knowledge from DB + optional external knowledge_base_url.
  */
-export async function buildContextForProject(projectId: string): Promise<string> {
-  const [dbContext, externalContext] = await Promise.all([
-    projectKnowledgeRepo.getContextString(projectId),
-    fetchExternalKnowledge(projectId),
-  ]);
+export async function buildContextForProject(
+  projectId: string,
+  options?: { query?: string }
+): Promise<string> {
+  const project = await prisma.project.findFirst({
+    where: { id: projectId },
+    select: { use_rag: true },
+  });
 
+  const useRag = project?.use_rag && options?.query?.trim();
+  let dbContext = '';
+
+  if (useRag) {
+    try {
+      const queryEmbedding = await embeddingService.embedText(options!.query!.trim());
+      const chunks = await knowledgeChunkRepo.searchSimilar(
+        projectId,
+        queryEmbedding,
+        RAG_TOP_K
+      );
+      if (chunks.length > 0) {
+        dbContext = chunks.map((c) => c.content).join('\n\n---\n\n');
+      }
+    } catch (err) {
+      console.warn('[RAG] Vector search failed, falling back to full context:', err instanceof Error ? err.message : err);
+      dbContext = await projectKnowledgeRepo.getContextString(projectId);
+    }
+  } else {
+    dbContext = await projectKnowledgeRepo.getContextString(projectId);
+  }
+
+  const externalContext = await fetchExternalKnowledge(projectId);
   const parts: string[] = [];
   if (dbContext.trim()) {
     parts.push('Knowledge from your database:\n' + dbContext);

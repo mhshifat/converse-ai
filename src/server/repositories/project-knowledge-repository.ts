@@ -5,6 +5,8 @@ export interface ProjectKnowledgeItem {
   projectId: string;
   title: string | null;
   content: string;
+  sourceType: string | null;
+  sourceRef: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -27,9 +29,36 @@ export async function listByProject(
     projectId: r.project_id,
     title: r.title,
     content: r.content,
+    sourceType: r.source_type,
+    sourceRef: r.source_ref,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   }));
+}
+
+export async function getById(
+  id: string,
+  projectId: string,
+  tenantId: string
+): Promise<ProjectKnowledgeItem | null> {
+  const project = await prisma.project.findFirst({
+    where: { id: projectId, tenant_id: tenantId },
+  });
+  if (!project) return null;
+  const row = await prisma.project_knowledge.findFirst({
+    where: { id, project_id: projectId },
+  });
+  if (!row) return null;
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    title: row.title,
+    content: row.content,
+    sourceType: row.source_type,
+    sourceRef: row.source_ref,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }
 
 export async function getContextString(projectId: string): Promise<string> {
@@ -49,7 +78,12 @@ export async function getContextString(projectId: string): Promise<string> {
 export async function create(
   projectId: string,
   tenantId: string,
-  data: { title?: string | null; content: string }
+  data: {
+    title?: string | null;
+    content: string;
+    sourceType?: string | null;
+    sourceRef?: string | null;
+  }
 ): Promise<ProjectKnowledgeItem | null> {
   const project = await prisma.project.findFirst({
     where: { id: projectId, tenant_id: tenantId },
@@ -61,6 +95,8 @@ export async function create(
       project_id: projectId,
       title: data.title ?? null,
       content: data.content,
+      source_type: data.sourceType ?? null,
+      source_ref: data.sourceRef ?? null,
     },
   });
   return {
@@ -68,6 +104,8 @@ export async function create(
     projectId: row.project_id,
     title: row.title,
     content: row.content,
+    sourceType: row.source_type,
+    sourceRef: row.source_ref,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -101,6 +139,38 @@ export async function update(
     projectId: row.project_id,
     title: row.title,
     content: row.content,
+    sourceType: row.source_type,
+    sourceRef: row.source_ref,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export async function updateContent(
+  id: string,
+  projectId: string,
+  tenantId: string,
+  data: { title?: string | null; content: string }
+): Promise<ProjectKnowledgeItem | null> {
+  const project = await prisma.project.findFirst({
+    where: { id: projectId, tenant_id: tenantId },
+  });
+  if (!project) return null;
+  const existing = await prisma.project_knowledge.findFirst({
+    where: { id, project_id: projectId },
+  });
+  if (!existing) return null;
+  const row = await prisma.project_knowledge.update({
+    where: { id },
+    data: { title: data.title ?? existing.title, content: data.content },
+  });
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    title: row.title,
+    content: row.content,
+    sourceType: row.source_type,
+    sourceRef: row.source_ref,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

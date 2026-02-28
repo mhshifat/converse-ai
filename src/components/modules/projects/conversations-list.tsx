@@ -54,12 +54,13 @@ export function ConversationsList({ projectId }: ConversationsListProps) {
       {
         initialPageParam: undefined as string | undefined,
         getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+        staleTime: 30_000,
       }
     );
 
   const { data: detail, isLoading: detailLoading } = trpc.conversations.getById.useQuery(
     { id: selectedId! },
-    { enabled: !!selectedId }
+    { enabled: !!selectedId, staleTime: 15_000 }
   );
 
   const conversations = data?.pages?.flatMap((p) => p.conversations) ?? [];

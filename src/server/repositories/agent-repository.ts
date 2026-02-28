@@ -80,6 +80,14 @@ export async function createAgent(data: {
       settings: (data.settings ?? {}) as object,
     },
   });
+  await prisma.agent_version.create({
+    data: {
+      agent_id: agent.id,
+      version: 1,
+      system_prompt: agent.system_prompt,
+      settings: agent.settings as object,
+    },
+  });
   return {
     id: agent.id,
     tenantId: agent.tenant_id,
@@ -105,6 +113,19 @@ export async function updateAgent(
   });
   if (!agent) return null;
 
+  const nextVersion =
+    (await prisma.agent_version
+      .aggregate({ where: { agent_id: agentId }, _max: { version: true } })
+      .then((r) => (r._max.version ?? 0) + 1));
+  await prisma.agent_version.create({
+    data: {
+      agent_id: agentId,
+      version: nextVersion,
+      system_prompt: agent.system_prompt,
+      settings: agent.settings as object,
+    },
+  });
+
   const updated = await prisma.agent.update({
     where: { id: agentId },
     data: {
@@ -122,6 +143,60 @@ export async function updateAgent(
     createdAt: updated.created_at,
     updatedAt: updated.updated_at,
   };
+}
+
+export interface AgentVersionItem {
+  id: string;
+  agentId: string;
+  version: number;
+  systemPrompt: string;
+  settings: Record<string, unknown>;
+  createdAt: Date;
+}
+
+export async function listAgentVersions(
+  agentId: string,
+  tenantId: string
+): Promise<AgentVersionItem[]> {
+  const agent = await prisma.agent.findFirst({
+    where: { id: agentId, tenant_id: tenantId },
+  });
+  if (!agent) return [];
+  const rows = await prisma.agent_version.findMany({
+    where: { agent_id: agentId },
+    orderBy: { version: 'desc' },
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    agentId: r.agent_id,
+    version: r.version,
+    systemPrompt: r.system_prompt,
+    settings: r.settings as Record<string, unknown>,
+    createdAt: r.created_at,
+  }));
+}
+
+export async function rollbackAgentToVersion(
+  agentId: string,
+  version: number,
+  tenantId: string
+): Promise<boolean> {
+  const agent = await prisma.agent.findFirst({
+    where: { id: agentId, tenant_id: tenantId },
+  });
+  if (!agent) return false;
+  const v = await prisma.agent_version.findFirst({
+    where: { agent_id: agentId, version },
+  });
+  if (!v) return false;
+  await prisma.agent.update({
+    where: { id: agentId },
+    data: {
+      system_prompt: v.system_prompt,
+      settings: v.settings,
+    },
+  });
+  return true;
 }
 
 export async function deleteAgent(agentId: string, tenantId: string) {

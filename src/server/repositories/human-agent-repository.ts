@@ -94,3 +94,33 @@ export async function isHumanAgent(userId: string, tenantId: string): Promise<bo
   });
   return !!r;
 }
+
+/** Get available human agents for handoff, optionally filtered by skill_tags overlap. Returns user_ids for round-robin. */
+export async function getAvailableForHandoff(
+  tenantId: string,
+  skillTags?: string[] | null
+): Promise<{ userId: string }[]> {
+  const rows = await prisma.human_agent.findMany({
+    where: {
+      tenant_id: tenantId,
+      is_available: true,
+      ...(skillTags && skillTags.length > 0
+        ? {
+            skill_tags: { not: null },
+          }
+        : {}),
+    },
+    orderBy: { id: 'asc' },
+    select: { user_id: true, skill_tags: true },
+  });
+  if (rows.length === 0) return [];
+  if (!skillTags || skillTags.length === 0)
+    return rows.map((r) => ({ userId: r.user_id }));
+  const set = new Set(skillTags.map((t) => t.toLowerCase()));
+  const filtered = rows.filter((r) => {
+    const tags = r.skill_tags as string[] | null;
+    if (!Array.isArray(tags)) return true;
+    return tags.some((t) => set.has(String(t).toLowerCase()));
+  });
+  return filtered.map((r) => ({ userId: r.user_id }));
+}

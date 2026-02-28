@@ -10,6 +10,9 @@ import { chatbotRouter } from './chatbot-router';
 import { conversationsRouter } from './conversations-router';
 import { liveChatRouter } from './live-chat-router';
 import { humanAgentsRouter } from './human-agents-router';
+import { cannedResponseRouter } from './canned-response-router';
+import { analyticsRouter } from './analytics-router';
+import { contactsRouter } from './contacts-router';
 import { publicProcedure, router } from '@/server/trpc';
 
 export const appRouter = router({
@@ -21,11 +24,14 @@ export const appRouter = router({
   projectAgents: projectAgentsRouter,
   projectKnowledge: projectKnowledgeRouter,
   integrations: integrationsRouter,
+  contacts: contactsRouter,
   widget: widgetRouter,
   chatbot: chatbotRouter,
   conversations: conversationsRouter,
   liveChat: liveChatRouter,
   humanAgents: humanAgentsRouter,
+  cannedResponse: cannedResponseRouter,
+  analytics: analyticsRouter,
 });
 
 export type AppRouter = typeof appRouter;

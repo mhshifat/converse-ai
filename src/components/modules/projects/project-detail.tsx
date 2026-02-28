@@ -29,6 +29,14 @@ interface ProjectDetailProps {
     dataSchema?: unknown;
     deliveryIntegrationIds?: string[];
     conversationMode?: 'human_only' | 'ai_only' | 'both';
+    defaultRatingType?: 'thumbs' | 'nps';
+    businessHours?: Record<string, unknown> | null;
+    outOfOfficeMessage?: string | null;
+    queueOverflowMessage?: string | null;
+    slaEscalateMinutes?: number | null;
+    escalationKeywords?: string[] | null;
+    proactiveDelaySeconds?: number | null;
+    proactiveOnExitIntent?: boolean;
     createdAt: Date;
     updatedAt: Date;
     chatbots: ChatbotConfig[];
@@ -304,6 +312,14 @@ export function ProjectDetail({ project }: ProjectDetailProps) {
             dataSchema={project.dataSchema}
             deliveryIntegrationIds={project.deliveryIntegrationIds ?? []}
             conversationMode={project.conversationMode ?? 'both'}
+            defaultRatingType={project.defaultRatingType ?? 'thumbs'}
+            businessHours={project.businessHours}
+            outOfOfficeMessage={project.outOfOfficeMessage ?? ''}
+            queueOverflowMessage={project.queueOverflowMessage ?? ''}
+            slaEscalateMinutes={project.slaEscalateMinutes ?? undefined}
+            escalationKeywords={project.escalationKeywords ?? []}
+            proactiveDelaySeconds={project.proactiveDelaySeconds ?? undefined}
+            proactiveOnExitIntent={project.proactiveOnExitIntent ?? false}
           />
         </TabsContent>
       </Tabs>

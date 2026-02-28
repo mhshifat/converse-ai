@@ -1,14 +1,91 @@
 import { prisma } from '@/lib/prisma';
 import { AgentProviderFactory } from '@/adapters/agent-provider-factory';
 import { getDefaultAgentForProject } from '../repositories/project-agent-repository';
+import { getAvailableForHandoff } from '../repositories/human-agent-repository';
 import { buildContextForProject } from './agent-context-service';
 import { getEmailSender } from '@/server/delivery/email-sender';
 import { getSmsSender } from '@/server/delivery/sms-sender';
+import { fireWebhook } from '@/server/delivery/webhook-sender';
+
+/** business_hours: { timezone: string, schedule: [{ day: number (0=Sun), start: '09:00', end: '17:00' }] }. Returns true if now is within any window. */
+function isWithinBusinessHours(businessHours: unknown): boolean {
+  if (!businessHours || typeof (businessHours as Record<string, unknown>).timezone !== 'string')
+    return true;
+  const bh = businessHours as { timezone: string; schedule?: { day: number; start: string; end: string }[] };
+  const schedule = Array.isArray(bh.schedule) ? bh.schedule : [];
+  if (schedule.length === 0) return true;
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: bh.timezone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    weekday: 'short',
+  });
+  const parts = formatter.formatToParts(new Date());
+  const hour = parseInt(parts.find((p) => p.type === 'hour')?.value ?? '0', 10);
+  const minute = parseInt(parts.find((p) => p.type === 'minute')?.value ?? '0', 10);
+  const weekday = parts.find((p) => p.type === 'weekday')?.value;
+  const dayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const today = dayMap[weekday ?? 'Sun'] ?? 0;
+  const minutesSinceMidnight = hour * 60 + minute;
+  const parseTime = (s: string) => {
+    const [h, m] = s.split(':').map(Number);
+    return (h ?? 0) * 60 + (m ?? 0);
+  };
+  return schedule.some(
+    (s) =>
+      s.day === today &&
+      minutesSinceMidnight >= parseTime(s.start) &&
+      minutesSinceMidnight < parseTime(s.end)
+  );
+}
 
 /**
  * Builds an instruction for the AI to collect required/optional fields from the data schema.
  * Injected into the system prompt so the AI ensures required fields are filled before closing.
  */
+function buildVoiceChannelInstruction(dataSchema: Record<string, unknown>): string {
+  const props = dataSchema.properties as Record<string, unknown> | undefined;
+  let spellingSection = '';
+  if (props && Object.keys(props).length > 0) {
+    const spellingFields = Object.keys(props).filter((k) => {
+      const lower = k.toLowerCase();
+      return (
+        lower.includes('name') ||
+        lower.includes('email') ||
+        lower.includes('phone') ||
+        lower.includes('address') ||
+        lower.includes('zip') ||
+        lower.includes('postal') ||
+        lower.includes('number') ||
+        lower.includes('url') ||
+        lower.includes('website')
+      );
+    });
+    if (spellingFields.length > 0) {
+      spellingSection =
+        `\nFor these fields (${spellingFields.join(', ')}), after the customer says the value, ask them to spell it out letter by letter or digit by digit to confirm.\n` +
+        'Examples:\n' +
+        '- "Could you spell your name for me, letter by letter?"\n' +
+        '- "Could you spell out your email address for me?"\n' +
+        '- "Could you say your phone number digit by digit?"\n' +
+        'After they spell it, repeat it back to confirm before moving on.\n';
+    }
+  }
+  return (
+    '\n\n--- VOICE CALL RULES ---\n' +
+    'The customer is on a voice call. Follow these rules strictly:\n' +
+    '1. Ask ONLY ONE question per message. NEVER ask two or more questions in the same reply.\n' +
+    '2. Wait for the customer to answer before asking the next question.\n' +
+    '3. Keep each message short — one sentence for the question, optionally one sentence of context.\n' +
+    '4. Do NOT list multiple things you need. Collect information one field at a time.\n' +
+    'BAD example: "May I have your name? And what is your email? Also, which department?"\n' +
+    'GOOD example: "May I have your name, please?"\n' +
+    '(Then wait for answer, then ask the next question in your next message.)\n' +
+    spellingSection
+  );
+}
+
 function buildDataCollectionInstruction(schema: Record<string, unknown>): string {
   const props = schema.properties as Record<string, unknown> | undefined;
   const requiredList = schema.required as string[] | undefined;
@@ -64,22 +141,39 @@ export async function assignAgent(tenantId: string): Promise<string | null> {
   return agents[idx]!.id;
 }
 
+export type StartConversationResult =
+  | { id: string; agentId: string; agentName: string }
+  | { unavailable: 'outside_hours' | 'queue_full'; message?: string | null }
+  | null;
+
 export async function startConversation(
   chatbotId: string,
   customerId: string,
   channel: 'text' | 'call'
-) {
+): Promise<StartConversationResult> {
   const chatbot = await prisma.chatbot.findUnique({
     where: { id: chatbotId },
     include: { project: true },
   });
   if (!chatbot) return null;
 
-  const tenantId = chatbot.project.tenant_id;
-  const projectId = chatbot.project.id;
+  const project = chatbot.project;
+  if (project.business_hours && !isWithinBusinessHours(project.business_hours)) {
+    return {
+      unavailable: 'outside_hours',
+      message: project.out_of_office_message ?? 'We are currently outside business hours.',
+    };
+  }
+
+  const tenantId = project.tenant_id;
+  const projectId = project.id;
   let agentId = await getDefaultAgentForProject(projectId, channel);
   if (!agentId) agentId = await assignAgent(tenantId);
-  if (!agentId) return null;
+  if (!agentId) {
+    if (project.queue_overflow_message)
+      return { unavailable: 'queue_full', message: project.queue_overflow_message };
+    return null;
+  }
 
   const conversationMode = (chatbot.project.conversation_mode as string) ?? 'both';
   const conversation = await prisma.conversation.create({
@@ -91,6 +185,12 @@ export async function startConversation(
       status: 'active',
       ...(conversationMode === 'human_only' && { handoff_requested_at: new Date() }),
     },
+  });
+  void fireWebhook(tenantId, 'conversation.created', {
+    conversationId: conversation.id,
+    projectId,
+    chatbotId,
+    customerId,
   });
   const agent = await prisma.agent.findUnique({ where: { id: agentId }, select: { name: true } });
   return {
@@ -104,22 +204,40 @@ export async function startConversation(
  * Creates a conversation and the first customer message in one go. Use this instead of
  * startConversation + sendMessage for the first message so we never persist 0-message conversations.
  */
+export type SendFirstMessageResult =
+  | { conversationId: string; response: string | null; handoffRequested: boolean }
+  | { unavailable: 'outside_hours' | 'queue_full'; message?: string | null }
+  | null;
+
 export async function sendFirstMessage(
   apiKey: string,
   customerId: string,
   channel: 'text' | 'call',
-  content: string
-): Promise<{ conversationId: string; response: string | null; handoffRequested: boolean } | null> {
+  content: string,
+  attachmentUrl?: string
+): Promise<SendFirstMessageResult> {
   const chatbot = await getChatbotByApiKey(apiKey);
   if (!chatbot) return null;
 
-  const tenantId = chatbot.project.tenant_id;
-  const projectId = chatbot.project.id;
+  const project = chatbot.project;
+  if (project.business_hours && !isWithinBusinessHours(project.business_hours)) {
+    return {
+      unavailable: 'outside_hours',
+      message: project.out_of_office_message ?? 'We are currently outside business hours.',
+    };
+  }
+
+  const tenantId = project.tenant_id;
+  const projectId = project.id;
   let agentId = await getDefaultAgentForProject(projectId, channel);
   if (!agentId) agentId = await assignAgent(tenantId);
-  if (!agentId) return null;
+  if (!agentId) {
+    if (project.queue_overflow_message)
+      return { unavailable: 'queue_full', message: project.queue_overflow_message };
+    return null;
+  }
 
-  const conversationMode = (chatbot.project.conversation_mode as string) ?? 'both';
+  const conversationMode = (project.conversation_mode as string) ?? 'both';
   const conversation = await prisma.conversation.create({
     data: {
       chatbot_id: chatbot.id,
@@ -131,6 +249,12 @@ export async function sendFirstMessage(
     },
   });
   const conversationId = conversation.id;
+  void fireWebhook(tenantId, 'conversation.created', {
+    conversationId,
+    projectId,
+    chatbotId: chatbot.id,
+    customerId,
+  });
 
   await prisma.message.create({
     data: {
@@ -138,6 +262,7 @@ export async function sendFirstMessage(
       sender_type: 'customer',
       sender_id: customerId,
       content,
+      payload: attachmentUrl ? ({ type: 'file', url: attachmentUrl } as object) : undefined,
     },
   });
 
@@ -164,17 +289,19 @@ export async function sendFirstMessage(
     role: m.sender_type === 'customer' ? 'user' : 'assistant',
     content: m.content,
   }));
-  const knowledgeContext = await buildContextForProject(projectId);
+  const knowledgeContext = await buildContextForProject(projectId, { query: content });
   const dataSchema = (conversationWithAgent.chatbot.project.data_schema ?? {}) as Record<string, unknown>;
   const dataCollectionInstruction = buildDataCollectionInstruction(dataSchema);
   const aiOnlyMode = conversationMode === 'ai_only';
   const handoffInstruction = aiOnlyMode
     ? ''
     : '\n\nOnly when the customer explicitly asks to speak with a human agent, a real person, or to be transferred to support (e.g. "I want to talk to a person", "connect me to an agent", "I need human help"), or when they have a complaint or escalation you cannot resolve, end your reply with exactly: __HANDOFF__. Do NOT use __HANDOFF__ when the customer is simply closing the conversation (e.g. "no thanks", "that\'s all", "nothing else", "I\'m good", "no that\'s all")—reply with a short closing (e.g. "Glad I could help. Take care!") and do not add __HANDOFF__. Only use __END_CONVERSATION__ when you are saying a final goodbye (e.g. "Glad I could help. Take care!") after the customer has already said they are done (e.g. "no thanks", "that\'s all", "nothing else"). Do NOT use __END_CONVERSATION__ when you are asking the customer a question like "Is there anything else I can help you with?" or "Anything else?"—wait for their answer first; only close the conversation in your next reply if they decline.';
+  const voiceInstruction = channel === 'call' ? buildVoiceChannelInstruction(dataSchema) : '';
   const systemPromptWithKnowledge =
     conversationWithAgent.agent.system_prompt +
     (knowledgeContext ? knowledgeContext : '') +
     (dataCollectionInstruction ? dataCollectionInstruction : '') +
+    voiceInstruction +
     handoffInstruction;
   let { response } = await provider.sendMessage({
     prompt: content,
@@ -198,15 +325,20 @@ export async function sendFirstMessage(
     response = response.replace(/\n?__END_CONVERSATION__\n?/g, '').trim() || response;
     conversationEnded = true;
   }
-
-  await prisma.message.create({
-    data: {
-      conversation_id: conversationId,
-      sender_type: 'agent',
-      sender_id: conversationWithAgent.agent_id,
-      content: response,
-    },
-  });
+  await prisma.$transaction([
+    prisma.message.create({
+      data: {
+        conversation_id: conversationId,
+        sender_type: 'agent',
+        sender_id: conversationWithAgent.agent_id,
+        content: response,
+      },
+    }),
+    prisma.conversation.updateMany({
+      where: { id: conversationId, first_response_at: null },
+      data: { first_response_at: new Date() },
+    }),
+  ]);
   let compiledData: Record<string, unknown> = {};
   let endedMessages: { role: 'customer' | 'agent' | 'human_agent'; content: string }[] = [];
   if (conversationEnded) {
@@ -228,7 +360,8 @@ export async function sendFirstMessage(
 export async function sendMessage(
   conversationId: string,
   content: string,
-  senderType: 'customer' | 'agent'
+  senderType: 'customer' | 'agent',
+  attachmentUrl?: string
 ) {
   const conversation = await prisma.conversation.findUnique({
     where: { id: conversationId },
@@ -245,14 +378,44 @@ export async function sendMessage(
       ? conversation.customer_id
       : conversation.agent_id;
 
-  await prisma.message.create({
+  const message = await prisma.message.create({
     data: {
       conversation_id: conversationId,
       sender_type: senderType,
       sender_id: senderId,
       content,
+      payload:
+        senderType === 'customer' && attachmentUrl
+          ? ({ type: 'file', url: attachmentUrl } as object)
+          : undefined,
     },
   });
+  void fireWebhook(conversation.chatbot.project.tenant_id, 'message.sent', {
+    conversationId,
+    projectId: conversation.chatbot.project_id,
+    chatbotId: conversation.chatbot_id,
+    customerId: conversation.customer_id,
+    messageId: message.id,
+    content,
+    senderType,
+  });
+
+  if (senderType === 'customer' && !conversation.handoff_requested_at) {
+    const project = conversation.chatbot.project;
+    const slaMinutes = project.sla_escalate_minutes ?? 0;
+    const keywords = (project.escalation_keywords as string[] | null) ?? [];
+    const contentLower = content.toLowerCase();
+    const slaBreach =
+      slaMinutes > 0 &&
+      !conversation.first_response_at &&
+      Date.now() - conversation.started_at.getTime() > slaMinutes * 60 * 1000;
+    const keywordMatch =
+      keywords.length > 0 &&
+      keywords.some((k) => contentLower.includes(String(k).toLowerCase()));
+    if (slaBreach || keywordMatch) {
+      await requestHumanHandoff(conversationId);
+    }
+  }
 
   if (senderType === 'customer' && !withHuman && !humanOnlyMode) {
     const agentSettings = (conversation.agent.settings ?? {}) as Record<string, unknown>;
@@ -272,9 +435,10 @@ export async function sendMessage(
     }));
     const projectId = conversation.chatbot.project_id;
     const project = conversation.chatbot.project;
-    const knowledgeContext = await buildContextForProject(projectId);
+    const knowledgeContext = await buildContextForProject(projectId, { query: content });
     const dataSchema = (project.data_schema ?? {}) as Record<string, unknown>;
     const dataCollectionInstruction = buildDataCollectionInstruction(dataSchema);
+    const voiceInstruction = conversation.channel === 'call' ? buildVoiceChannelInstruction(dataSchema) : '';
     const handoffInstruction = aiOnlyMode
       ? ''
       : '\n\nOnly when the customer explicitly asks to speak with a human agent, a real person, or to be transferred to support (e.g. "I want to talk to a person", "connect me to an agent", "I need human help"), or when they have a complaint or escalation you cannot resolve, end your reply with exactly: __HANDOFF__. Do NOT use __HANDOFF__ when the customer is simply closing the conversation (e.g. "no thanks", "that\'s all", "nothing else", "I\'m good", "no that\'s all")—reply with a short closing (e.g. "Glad I could help. Take care!") and do not add __HANDOFF__. Only use __END_CONVERSATION__ when you are saying a final goodbye (e.g. "Glad I could help. Take care!") after the customer has already said they are done (e.g. "no thanks", "that\'s all", "nothing else"). Do NOT use __END_CONVERSATION__ when you are asking the customer a question like "Is there anything else I can help you with?" or "Anything else?"—wait for their answer first; only close the conversation in your next reply if they decline.';
@@ -284,6 +448,7 @@ export async function sendMessage(
         ? knowledgeContext
         : '') +
       (dataCollectionInstruction ? dataCollectionInstruction : '') +
+      voiceInstruction +
       handoffInstruction;
     let { response } = await provider.sendMessage({
       prompt: content,
@@ -307,15 +472,20 @@ export async function sendMessage(
       response = response.replace(/\n?__END_CONVERSATION__\n?/g, '').trim() || response;
       conversationEnded = true;
     }
-
-    await prisma.message.create({
-      data: {
-        conversation_id: conversationId,
-        sender_type: 'agent',
-        sender_id: conversation.agent_id,
-        content: response,
-      },
-    });
+    await prisma.$transaction([
+      prisma.message.create({
+        data: {
+          conversation_id: conversationId,
+          sender_type: 'agent',
+          sender_id: conversation.agent_id,
+          content: response,
+        },
+      }),
+      prisma.conversation.updateMany({
+        where: { id: conversationId, first_response_at: null },
+        data: { first_response_at: new Date() },
+      }),
+    ]);
     let compiledData: Record<string, unknown> = {};
     let endedMessages: { role: 'customer' | 'agent' | 'human_agent'; content: string }[] = [];
     if (conversationEnded) {
@@ -681,7 +851,10 @@ export async function getConversationMessagesForWidget(conversationId: string) {
       status: true,
       handoff_requested_at: true,
       assigned_human_agent_id: true,
-      messages: { orderBy: { created_at: 'asc' }, select: { sender_type: true, content: true, created_at: true } },
+      messages: {
+        orderBy: { created_at: 'asc' },
+        select: { sender_type: true, content: true, payload: true, created_at: true },
+      },
     },
   });
   if (!conversation) return null;
@@ -692,6 +865,7 @@ export async function getConversationMessagesForWidget(conversationId: string) {
     messages: conversation.messages.map((m) => ({
       senderType: m.sender_type,
       content: m.content,
+      payload: m.payload as Record<string, unknown> | null,
       createdAt: m.created_at,
     })),
   };
@@ -700,7 +874,13 @@ export async function getConversationMessagesForWidget(conversationId: string) {
 export async function requestHumanHandoff(conversationId: string): Promise<boolean> {
   const conversation = await prisma.conversation.findUnique({
     where: { id: conversationId },
-    select: { id: true, status: true, handoff_requested_at: true },
+    select: {
+      id: true,
+      status: true,
+      handoff_requested_at: true,
+      skill_tags: true,
+      chatbot: { select: { project: { select: { tenant_id: true } } } },
+    },
   });
   if (!conversation || conversation.status !== 'active') return false;
   if (conversation.handoff_requested_at) return true; // already requested
@@ -708,6 +888,14 @@ export async function requestHumanHandoff(conversationId: string): Promise<boole
     where: { id: conversationId },
     data: { handoff_requested_at: new Date() },
   });
+  const tenantId = conversation.chatbot.project.tenant_id;
+  const skillTags = Array.isArray(conversation.skill_tags)
+    ? (conversation.skill_tags as string[])
+    : null;
+  const available = await getAvailableForHandoff(tenantId, skillTags);
+  if (available.length > 0) {
+    await assignConversationToHuman(conversationId, available[0]!.userId, tenantId);
+  }
   return true;
 }
 
@@ -799,11 +987,62 @@ export async function assignConversationToHuman(
   return true;
 }
 
+export async function transferConversationToAgent(
+  conversationId: string,
+  fromUserId: string,
+  toUserId: string,
+  tenantId: string
+): Promise<boolean> {
+  const conversation = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    include: { chatbot: { include: { project: { select: { tenant_id: true } } } } },
+  });
+  if (
+    !conversation ||
+    conversation.chatbot.project.tenant_id !== tenantId ||
+    conversation.status !== 'active' ||
+    conversation.assigned_human_agent_id !== fromUserId
+  )
+    return false;
+  await prisma.conversation.update({
+    where: { id: conversationId },
+    data: {
+      assigned_human_agent_id: toUserId,
+      transferred_to_agent_id: toUserId,
+    },
+  });
+  return true;
+}
+
+export async function submitRating(
+  conversationId: string,
+  ratingType: 'thumbs' | 'nps',
+  ratingValue: number
+): Promise<boolean> {
+  const conversation = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    select: { status: true },
+  });
+  if (!conversation || conversation.status !== 'closed') return false;
+  const value =
+    ratingType === 'thumbs' ? Math.sign(ratingValue) : Math.min(10, Math.max(0, Math.round(ratingValue)));
+  await prisma.conversation.update({
+    where: { id: conversationId },
+    data: {
+      rating_type: ratingType,
+      rating_value: value,
+      rated_at: new Date(),
+    },
+  });
+  return true;
+}
+
 export async function sendMessageAsHuman(
   conversationId: string,
   content: string,
   userId: string,
-  tenantId: string
+  tenantId: string,
+  payload?: Record<string, unknown> | null
 ): Promise<{ success: boolean }> {
   const conversation = await prisma.conversation.findUnique({
     where: { id: conversationId },
@@ -822,6 +1061,7 @@ export async function sendMessageAsHuman(
       sender_type: 'human_agent',
       sender_id: userId,
       content,
+      payload: payload ?? undefined,
     },
   });
   return { success: true };
