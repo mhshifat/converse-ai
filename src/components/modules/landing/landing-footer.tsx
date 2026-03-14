@@ -56,7 +56,7 @@ export function LandingFooter() {
           {/* Brand column */}
           <div className="col-span-2">
             <Link href="/" className="inline-flex items-center gap-2.5 mb-4">
-              <ConverseLogo size={28} animated />
+              <ConverseLogo size={28} animated className="text-gray-200" />
               <span className="text-lg font-bold text-white tracking-tight">
                 Converse<span className="text-blue-400">AI</span>
               </span>

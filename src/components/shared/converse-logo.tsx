@@ -1,4 +1,5 @@
 import React from 'react';
+import { cn } from '@/lib/utils';
 
 /**
  * ConverseAI logo: conversation (two message shapes) + connection (center node).
@@ -27,7 +28,7 @@ export function ConverseLogo({
     : undefined;
 
   return (
-    <span className={`inline-flex items-center gap-2 shrink-0 ${className}`}>
+    <span className={cn('inline-flex items-center gap-2 shrink-0 text-primary', className)}>
       <svg
         width={s}
         height={s}
@@ -35,7 +36,7 @@ export function ConverseLogo({
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
         aria-hidden
-        className="text-primary"
+        className="size-full text-inherit"
       >
         {/* Left bubble: main message (pill + tail) */}
         <rect x="4" y="6" width="12" height="8" rx="4" ry="4" fill="currentColor" fillOpacity="0.95" />
