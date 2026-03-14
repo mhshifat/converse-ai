@@ -22,7 +22,9 @@ export function ChatbotEmbedSection({ projectId }: ChatbotEmbedSectionProps) {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const appUrl = process.env.NEXT_PUBLIC_APP_URL;
-    setOrigin(appUrl ? appUrl.replace(/\/$/, '') : window.location.origin);
+    const value = appUrl ? appUrl.replace(/\/$/, '') : window.location.origin;
+    const id = setTimeout(() => setOrigin(value), 0);
+    return () => clearTimeout(id);
   }, []);
 
   const embedSnippet =

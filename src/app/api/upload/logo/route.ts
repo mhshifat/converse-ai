@@ -29,6 +29,7 @@ export async function POST(request: Request) {
       { error: 'File too large. Maximum size is 2 MB.' },
       { status: 400 }
     );
+  }
   if (!ALLOWED_TYPES.includes(file.type)) {
     return NextResponse.json(
       { error: 'Invalid file type. Use JPEG, PNG, GIF, WebP, or SVG.' },
@@ -40,11 +41,9 @@ export async function POST(request: Request) {
     const buffer = Buffer.from(await file.arrayBuffer());
     const result = await uploadService.upload(buffer, file.name, { folder: 'converseai-logos' });
     return NextResponse.json({ url: result.url });
-  } catch (err) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Upload failed';
     console.error('[Upload] Logo upload failed:', err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Upload failed' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
