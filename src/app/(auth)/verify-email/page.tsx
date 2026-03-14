@@ -1,21 +1,21 @@
-"use client";
+'use client';
 
-import React from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { trpc } from "../../../utils/trpc";
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import Link from "next/link";
+import React, { Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { trpc } from '@/utils/trpc';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import Link from 'next/link';
 
-export default function VerifyEmailPage() {
+function VerifyEmailContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const token = searchParams.get("token");
+  const token = searchParams.get('token');
   const verifyEmail = trpc.auth.verifyEmail.useMutation();
 
   React.useEffect(() => {
     if (!token) {
-      router.replace("/login?error=missing_token");
+      router.replace('/login?error=missing_token');
       return;
     }
     verifyEmail.mutate(
@@ -23,13 +23,13 @@ export default function VerifyEmailPage() {
       {
         onSuccess: (data) => {
           if (data.success) {
-            router.replace("/login?verified=success");
+            router.replace('/login?verified=success');
           } else {
-            router.replace(`/login?error=${encodeURIComponent(data.error ?? "invalid")}`);
+            router.replace(`/login?error=${encodeURIComponent(data.error ?? 'invalid')}`);
           }
         },
         onError: () => {
-          router.replace("/login?error=verification_failed");
+          router.replace('/login?error=verification_failed');
         },
       }
     );
@@ -73,7 +73,7 @@ export default function VerifyEmailPage() {
           <>
             <Alert variant="destructive">
               <AlertTitle>Verification failed</AlertTitle>
-              <AlertDescription>{verifyEmail.data?.error ?? "Something went wrong."}</AlertDescription>
+              <AlertDescription>{verifyEmail.data?.error ?? 'Something went wrong.'}</AlertDescription>
             </Alert>
             <Button asChild className="mt-4 w-full">
               <Link href="/login">Back to login</Link>
@@ -82,5 +82,24 @@ export default function VerifyEmailPage() {
         )}
       </div>
     </main>
+  );
+}
+
+function VerifyEmailFallback() {
+  return (
+    <main className="min-h-screen flex items-center justify-center bg-linear-to-br from-blue-50 to-blue-100">
+      <div className="w-full max-w-md p-8 bg-white rounded-xl shadow-lg text-center">
+        <h1 className="text-xl font-semibold mb-2">Verifying your email…</h1>
+        <p className="text-muted-foreground text-sm">Please wait.</p>
+      </div>
+    </main>
+  );
+}
+
+export default function VerifyEmailPage() {
+  return (
+    <Suspense fallback={<VerifyEmailFallback />}>
+      <VerifyEmailContent />
+    </Suspense>
   );
 }
