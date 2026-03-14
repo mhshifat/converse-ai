@@ -67,6 +67,8 @@ export interface ChatbotWidgetConfig {
   showPoweredBy: boolean;
   /** Rating after conversation: 'thumbs' (up/down) or 'nps' (0-10). */
   defaultRatingType: 'thumbs' | 'nps';
+  /** Allow users to attach files (images, PDF, text) in the chat input. */
+  attachmentsEnabled: boolean;
   /** Show a welcome message bubble on first page visit (session). */
   proactiveWelcomeEnabled?: boolean;
   /** Delay in seconds before showing the first-visit welcome bubble. 0 = immediately. */
@@ -140,6 +142,7 @@ export const DEFAULT_WIDGET_CONFIG: ChatbotWidgetConfig = {
   voiceEnabled: false,
   showPoweredBy: true,
   defaultRatingType: 'thumbs',
+  attachmentsEnabled: false,
   proactiveWelcomeEnabled: false,
   proactiveWelcomeDelaySeconds: 0,
   proactiveWelcomeStatus: '',
@@ -164,6 +167,7 @@ export function mergeWidgetConfig(
     voiceEnabled: (c.voiceEnabled as boolean) ?? DEFAULT_WIDGET_CONFIG.voiceEnabled,
     showPoweredBy: (c.showPoweredBy as boolean) ?? DEFAULT_WIDGET_CONFIG.showPoweredBy,
     defaultRatingType: (c.defaultRatingType as 'thumbs' | 'nps') ?? DEFAULT_WIDGET_CONFIG.defaultRatingType,
+    attachmentsEnabled: (c.attachmentsEnabled as boolean) ?? DEFAULT_WIDGET_CONFIG.attachmentsEnabled,
     proactiveWelcomeEnabled: (c.proactiveWelcomeEnabled as boolean) ?? DEFAULT_WIDGET_CONFIG.proactiveWelcomeEnabled,
     proactiveWelcomeDelaySeconds: (c.proactiveWelcomeDelaySeconds as number) ?? DEFAULT_WIDGET_CONFIG.proactiveWelcomeDelaySeconds,
     proactiveWelcomeStatus: (c.proactiveWelcomeStatus as string) ?? DEFAULT_WIDGET_CONFIG.proactiveWelcomeStatus,
@@ -186,6 +190,7 @@ export function widgetConfigToStorage(config: ChatbotWidgetConfig): Record<strin
     voiceEnabled: config.voiceEnabled,
     showPoweredBy: config.showPoweredBy,
     defaultRatingType: config.defaultRatingType,
+    attachmentsEnabled: config.attachmentsEnabled,
     proactiveWelcomeEnabled: config.proactiveWelcomeEnabled,
     proactiveWelcomeDelaySeconds: config.proactiveWelcomeDelaySeconds,
     proactiveWelcomeStatus: config.proactiveWelcomeStatus,

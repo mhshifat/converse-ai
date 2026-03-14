@@ -1257,14 +1257,16 @@ export function LiveChatbotPreview({
                       </button>
                     )}
                     <div className="flex gap-2">
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/*,.pdf,.txt"
-                        className="hidden"
-                        onChange={handleFileSelect}
-                        disabled={!apiKey}
-                      />
+                      {config.attachmentsEnabled && (
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/*,.pdf,.txt"
+                          className="hidden"
+                          onChange={handleFileSelect}
+                          disabled={!apiKey}
+                        />
+                      )}
                       <div
                         className="flex flex-1 items-center gap-2 rounded-full border px-3 py-2 transition-all duration-200 focus-within:ring-2 focus-within:ring-offset-1"
                         style={{
@@ -1273,16 +1275,18 @@ export function LiveChatbotPreview({
                           borderRadius: footer.inputBorderRadius * 2,
                         }}
                       >
-                        <button
-                          type="button"
-                          onClick={() => fileInputRef.current?.click()}
-                          disabled={!apiKey}
-                          className="shrink-0 rounded p-0.5 opacity-70 hover:opacity-100 disabled:opacity-40"
-                          style={{ color: msgCfg.welcomeTextColor }}
-                          aria-label="Attach file"
-                        >
-                          <Paperclip className="size-4" />
-                        </button>
+                        {config.attachmentsEnabled && (
+                          <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={!apiKey}
+                            className="shrink-0 rounded p-0.5 opacity-70 hover:opacity-100 disabled:opacity-40"
+                            style={{ color: msgCfg.welcomeTextColor }}
+                            aria-label="Attach file"
+                          >
+                            <Paperclip className="size-4" />
+                          </button>
+                        )}
                         <PenLine
                           className="size-4 shrink-0"
                           style={{ color: msgCfg.welcomeTextColor }}

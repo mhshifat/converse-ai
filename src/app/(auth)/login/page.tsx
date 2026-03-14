@@ -1,3 +1,4 @@
+import { cookies } from 'next/headers';
 import { buildMetadata } from '@/lib/seo';
 import { LoginForm } from '@/components/modules/auth/login-form';
 import { SignupBrandPanel } from '@/components/modules/auth/signup-brand-panel';
@@ -9,15 +10,18 @@ export const metadata = buildMetadata({
   noIndex: true,
 });
 
-export default function LoginPage() {
+const LAST_AUTH_PROVIDER_COOKIE = 'last_auth_provider';
+
+export default async function LoginPage() {
+  const cookieStore = await cookies();
+  const lastAuthProvider = cookieStore.get(LAST_AUTH_PROVIDER_COOKIE)?.value as 'google' | 'github' | undefined;
+  const valid = lastAuthProvider === 'google' || lastAuthProvider === 'github' ? lastAuthProvider : undefined;
+
   return (
     <div className="flex min-h-screen fixed inset-0 w-full">
-      {/* Left: branded panel (hidden on mobile) — same as signup */}
       <SignupBrandPanel />
-
-      {/* Right: form area */}
       <main className="flex w-full lg:w-1/2 items-center justify-center px-6 py-10 overflow-auto">
-        <LoginForm />
+        <LoginForm lastAuthProvider={valid} />
       </main>
     </div>
   );

@@ -62,6 +62,7 @@ const EMBED_SCRIPT = `
     position: 'bottom-right',
     voiceEnabled: false,
     showPoweredBy: true,
+    attachmentsEnabled: false,
     proactiveWelcomeEnabled: false,
     proactiveWelcomeDelaySeconds: 0,
     proactiveWelcomeStatus: '',
@@ -396,14 +397,14 @@ const EMBED_SCRIPT = `
       if (input) input.disabled = true;
       if (sendBtn) sendBtn.disabled = true;
     }
-    function send() {
+    function send(attachmentUrl) {
       if (conversationEnded) return;
-      var text = (input.value || '').trim();
+      var text = (input.value || '').trim() || (attachmentUrl ? '(attachment)' : '');
       if (!text) return;
       input.value = '';
       appendMsg('customer', text);
       if (conversationId) {
-        trpcMutate('widget.sendMessage', { conversationId: conversationId, content: text }).then(function(res) {
+        trpcMutate('widget.sendMessage', { conversationId: conversationId, content: text, attachmentUrl: attachmentUrl || undefined }).then(function(res) {
           var result = res && res.result && res.result.data && res.result.data.json;
           if (result && result.response) {
             appendMsg('agent', result.response);
@@ -417,7 +418,7 @@ const EMBED_SCRIPT = `
           if (result && result.conversationEnded) showConversationEnded();
         });
       } else {
-        trpcMutate('widget.sendFirstMessage', { apiKey: apiKey, customerId: customerId, channel: 'text', content: text }).then(function(res) {
+        trpcMutate('widget.sendFirstMessage', { apiKey: apiKey, customerId: customerId, channel: 'text', content: text, attachmentUrl: attachmentUrl || undefined }).then(function(res) {
           var result = res && res.result && res.result.data && res.result.data.json;
           if (result && result.unavailable) {
             appendMsg('agent', result.message || 'We are unable to take your message at the moment. Please try again later.');
@@ -438,7 +439,32 @@ const EMBED_SCRIPT = `
       }
     }
     input.onkeydown = function(e) { if (e.key === 'Enter') send(); };
-    sendBtn.onclick = send;
+    sendBtn.onclick = function() { send(); };
+    if (config.attachmentsEnabled) {
+      var fileInput = document.createElement('input');
+      fileInput.type = 'file';
+      fileInput.accept = 'image/*,.pdf,.txt';
+      fileInput.style.display = 'none';
+      fileInput.onchange = function() {
+        var file = fileInput.files && fileInput.files[0];
+        if (!file) return;
+        fileInput.value = '';
+        var fd = new FormData();
+        fd.append('apiKey', apiKey);
+        fd.append('file', file);
+        fetch(baseUrl + '/api/widget/upload', { method: 'POST', body: fd }).then(function(r) { return r.json(); }).then(function(data) {
+          if (data && data.url) send(data.url);
+        });
+      };
+      var attachBtn = document.createElement('button');
+      attachBtn.type = 'button';
+      attachBtn.setAttribute('aria-label', 'Attach file');
+      attachBtn.style.cssText = 'flex-shrink:0;padding:4px;border:none;background:none;cursor:pointer;color:#999;font-size:14px;';
+      attachBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>';
+      attachBtn.onclick = function() { fileInput.click(); };
+      inputWrap.insertBefore(attachBtn, inputWrap.firstChild);
+      inputRow.appendChild(fileInput);
+    }
     inputWrap.appendChild(inputIcon);
     inputWrap.appendChild(input);
     inputRow.appendChild(inputWrap);
@@ -528,6 +554,7 @@ const EMBED_SCRIPT = `
         if (c.position) config.position = c.position;
         if (c.voiceEnabled !== undefined) config.voiceEnabled = c.voiceEnabled;
         if (c.showPoweredBy !== undefined) config.showPoweredBy = c.showPoweredBy;
+        if (c.attachmentsEnabled !== undefined) config.attachmentsEnabled = c.attachmentsEnabled;
         if (c.bubble) config.bubble = merge(c.bubble, config.bubble);
         if (c.popup) config.popup = merge(c.popup, config.popup);
         if (c.header) config.header = merge(c.header, config.header);

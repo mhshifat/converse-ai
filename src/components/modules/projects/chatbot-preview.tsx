@@ -6,6 +6,7 @@ import {
   Mic,
   Send,
   PenLine,
+  Paperclip,
   Sparkles,
   Bot,
   UserRound,
@@ -348,6 +349,9 @@ export const ChatbotPreview = React.memo(function ChatbotPreview({ config, class
                         borderRadius: footer.inputBorderRadius * 2,
                       }}
                     >
+                      {config.attachmentsEnabled && (
+                        <Paperclip className="size-4 shrink-0 opacity-70" style={{ color: messages.welcomeTextColor }} />
+                      )}
                       <PenLine
                         className="size-4 shrink-0"
                         style={{ color: messages.welcomeTextColor }}

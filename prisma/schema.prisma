@@ -45,9 +45,11 @@ model user {
   email            String    @unique
   name             String
   role             String    // 'admin' | 'agent' | 'merchant'
-  password_hash    String
+  password_hash    String?   // null for OAuth-only users
   email_verified   Boolean   @default(false)
   email_verified_at DateTime?
+  google_id        String?   @unique // OAuth
+  github_id        String?   @unique // OAuth
   created_at       DateTime  @default(now())
   updated_at       DateTime  @updatedAt
   tenant           tenant    @relation(fields: [tenant_id], references: [id])

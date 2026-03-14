@@ -250,6 +250,13 @@ export function ProjectChatbotTab({ projectId, initialChatbot }: ProjectChatbotT
           </div>
           <div className="flex items-center gap-2">
             <Switch
+              checked={config.attachmentsEnabled ?? false}
+              onCheckedChange={(v) => patch('attachmentsEnabled' as keyof ChatbotWidgetConfig, v)}
+            />
+            <Label>Allow file attachments (images, PDF, text)</Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Switch
               checked={config.proactiveWelcomeEnabled ?? false}
               onCheckedChange={(v) => patch('proactiveWelcomeEnabled' as keyof ChatbotWidgetConfig, v)}
             />

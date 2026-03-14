@@ -6,6 +6,9 @@ export class EmailPasswordAuthProvider implements AuthProvider {
   async signIn(credentials: { email: string; password: string }): Promise<AuthResult> {
     const user = await prisma.user.findUnique({ where: { email: credentials.email } });
     if (!user) return { success: false, error: 'Invalid credentials' };
+    if (!user.password_hash) {
+      return { success: false, error: 'This account uses Google or GitHub to sign in. Use one of those options below.' };
+    }
     const valid = await bcrypt.compare(credentials.password, user.password_hash);
     if (!valid) return { success: false, error: 'Invalid credentials' };
     if (!user.email_verified) {
