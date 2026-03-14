@@ -562,11 +562,12 @@ const EMBED_SCRIPT = `
 })();
 `.replace(/\n\s+/g, '\n').trim();
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   return new Response(EMBED_SCRIPT, {
     headers: {
       'Content-Type': 'application/javascript; charset=utf-8',
-      'Cache-Control': 'public, max-age=300',
+      // Cache so repeat visits and other sites don't re-fetch every time.
+      'Cache-Control': 'public, max-age=3600',
     },
   });
 }

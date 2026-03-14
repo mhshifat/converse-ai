@@ -12,6 +12,7 @@ interface ChatbotEmbedSectionProps {
 
 export function ChatbotEmbedSection({ projectId }: ChatbotEmbedSectionProps) {
   const [copied, setCopied] = useState(false);
+  // Prefer NEXT_PUBLIC_APP_URL so the copied snippet uses your production URL (not localhost).
   const [origin, setOrigin] = useState<string>('');
   const { data: chatbot, isLoading, refetch } = trpc.chatbot.getByProjectId.useQuery({ projectId });
   const regenerateKey = trpc.chatbot.regenerateApiKey.useMutation({
@@ -19,7 +20,9 @@ export function ChatbotEmbedSection({ projectId }: ChatbotEmbedSectionProps) {
   });
 
   useEffect(() => {
-    setOrigin(typeof window !== 'undefined' ? window.location.origin : '');
+    if (typeof window === 'undefined') return;
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+    setOrigin(appUrl ? appUrl.replace(/\/$/, '') : window.location.origin);
   }, []);
 
   const embedSnippet =
@@ -111,6 +114,9 @@ export function ChatbotEmbedSection({ projectId }: ChatbotEmbedSectionProps) {
       </pre>
       <p className="text-muted-foreground mt-2 text-xs">
         API key: <code className="rounded bg-muted px-1">{chatbot.apiKey}</code>
+      </p>
+      <p className="text-muted-foreground mt-3 text-xs max-w-xl">
+        The API key is public and scoped to this widget only; it does not grant admin access.
       </p>
     </div>
   );

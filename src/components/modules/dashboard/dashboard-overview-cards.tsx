@@ -15,9 +15,8 @@ interface BentoCard {
   delay: number;
 }
 
-const cards: BentoCard[] = [
+const baseCards: Omit<BentoCard, 'href'>[] = [
   {
-    href: '/dashboard/projects',
     title: 'Projects',
     description: 'Create projects, customize chatbot design, data schema, and generate embed code.',
     icon: FolderKanban,
@@ -26,18 +25,16 @@ const cards: BentoCard[] = [
     delay: 0,
   },
   {
-    href: '/dashboard/agents',
     title: 'Agents',
-    description: 'Configure AI agents, system prompts, and provider settings.',
+    description: 'Configure AI agents, system prompts, and provider settings in a project.',
     icon: Bot,
     gradient: 'from-emerald-500 to-teal-500',
     span: '',
     delay: 1,
   },
   {
-    href: '/integrations',
     title: 'Integrations',
-    description: 'Email, Discord, and SMS for delivering conversation data.',
+    description: 'Email, Discord, and SMS for delivering conversation data from a project.',
     icon: Plug,
     gradient: 'from-violet-500 to-purple-500',
     span: '',
@@ -45,14 +42,37 @@ const cards: BentoCard[] = [
   },
 ];
 
-export function DashboardOverviewCards() {
+interface DashboardOverviewCardsProps {
+  variant?: 'default' | 'compact';
+  /** When set, Agents and Integrations cards link to this project's pages; otherwise they link to /projects. */
+  firstProjectId?: string | null;
+}
+
+function getCards(firstProjectId: string | null | undefined): BentoCard[] {
+  const hrefs = [
+    '/projects',
+    firstProjectId ? `/projects/${firstProjectId}/agents` : '/projects',
+    firstProjectId ? `/projects/${firstProjectId}/integrations` : '/projects',
+  ];
+  return baseCards.map((base, i) => ({ ...base, href: hrefs[i]! }));
+}
+
+export function DashboardOverviewCards({ variant = 'default', firstProjectId }: DashboardOverviewCardsProps) {
+  const cards = getCards(firstProjectId);
   return (
-    <div className="grid grid-cols-1 gap-4 sm:gap-5 md:grid-cols-2 lg:grid-cols-4">
+    <div
+      className={cn(
+        'grid grid-cols-1 gap-4 sm:gap-5',
+        variant === 'compact'
+          ? 'sm:grid-cols-2 lg:grid-cols-3'
+          : 'md:grid-cols-2 lg:grid-cols-4'
+      )}
+    >
       {cards.map((card) => {
         const Icon = card.icon;
         return (
           <Link
-            key={card.href}
+            key={card.title}
             href={card.href}
             className={cn(
               'group relative block rounded-2xl border border-border/50 bg-card shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
@@ -65,7 +85,12 @@ export function DashboardOverviewCards() {
               className={cn('absolute inset-x-0 top-0 h-[3px] rounded-t-2xl bg-linear-to-r opacity-80', card.gradient)}
               aria-hidden
             />
-            <div className="flex h-full flex-col p-5 sm:p-6">
+            <div
+              className={cn(
+                'flex h-full flex-col',
+                variant === 'compact' ? 'p-4 sm:p-5' : 'p-5 sm:p-6'
+              )}
+            >
               <div className="flex items-start justify-between gap-3">
                 <span
                   className={cn('flex size-11 items-center justify-center rounded-xl bg-linear-to-br text-white shadow-sm', card.gradient)}

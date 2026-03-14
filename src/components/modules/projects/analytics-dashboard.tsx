@@ -25,11 +25,16 @@ export function AnalyticsDashboard({ projectId }: AnalyticsDashboardProps) {
     return d.toISOString().slice(0, 10);
   });
 
+  const dateFromObj = new Date(dateFrom);
+  dateFromObj.setHours(0, 0, 0, 0);
+  const dateToObj = new Date(dateTo);
+  dateToObj.setHours(23, 59, 59, 999);
+
   const { data, isLoading } = trpc.analytics.getDashboard.useQuery(
     {
       projectId,
-      dateFrom: new Date(dateFrom),
-      dateTo: new Date(dateTo),
+      dateFrom: dateFromObj,
+      dateTo: dateToObj,
     },
     { staleTime: 60_000 }
   );

@@ -8,20 +8,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import {
   Pagination,
   PaginationContent,
   PaginationItem,
-  PaginationLink,
-  PaginationNext,
   PaginationPrevious,
+  PaginationNext,
 } from '@/components/ui/pagination';
 import {
   Empty,
@@ -31,7 +22,9 @@ import {
   EmptyDescription,
   EmptyContent,
 } from '@/components/ui/empty';
-import { FolderKanban } from 'lucide-react';
+import { FolderKanban, Search, MessageSquare, ArrowRight } from 'lucide-react';
+import { ProjectIcon } from '@/lib/project-icons';
+import { cn } from '@/lib/utils';
 
 const SEARCH_DEBOUNCE_MS = 250;
 
@@ -48,13 +41,14 @@ export function ProjectsList() {
 
   if (isLoading) {
     return (
-      <div className="rounded-lg border bg-card">
-        <div className="p-4 border-b">
-          <Skeleton className="h-9 w-64" />
+      <div className="space-y-6">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Skeleton className="h-11 w-full max-w-md rounded-xl" />
         </div>
-        <div className="p-4 space-y-2">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <Skeleton key={i} className="h-12 w-full" />
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <Skeleton key={i} className="h-44 rounded-2xl" />
           ))}
         </div>
       </div>
@@ -63,7 +57,7 @@ export function ProjectsList() {
 
   if (isError) {
     return (
-      <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-destructive">
+      <div className="rounded-2xl border border-destructive/50 bg-destructive/10 p-6 text-destructive">
         {error.message}
       </div>
     );
@@ -75,8 +69,10 @@ export function ProjectsList() {
   const hasPrev = page > 1;
 
   return (
-    <div className="rounded-lg border bg-card">
-      <div className="p-4 border-b flex flex-wrap items-center gap-2">
+    <div className="space-y-6">
+      {/* Search */}
+      <div className="relative max-w-md">
+        <Search className="absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           placeholder="Search projects..."
           value={search}
@@ -84,14 +80,15 @@ export function ProjectsList() {
             setSearch(e.target.value);
             setPage(1);
           }}
-          className="max-w-xs"
+          className="h-11 rounded-xl border-border/80 bg-muted/30 pl-10 pr-4 transition-colors focus:bg-background"
         />
       </div>
+
       {isEmpty ? (
-        <Empty>
+        <Empty className="rounded-2xl border border-dashed bg-muted/20 py-16">
           <EmptyHeader>
             <EmptyMedia>
-              <FolderKanban className="h-12 w-12 text-muted-foreground" />
+              <FolderKanban className="size-14 text-muted-foreground" />
             </EmptyMedia>
             <EmptyTitle>No projects yet</EmptyTitle>
             <EmptyDescription>
@@ -100,44 +97,61 @@ export function ProjectsList() {
           </EmptyHeader>
           <EmptyContent>
             <Link href="/projects/new">
-              <Button>Create project</Button>
+              <Button size="lg" className="rounded-xl">
+                Create project
+              </Button>
             </Link>
           </EmptyContent>
         </Empty>
       ) : (
         <>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead>Chatbots</TableHead>
-                <TableHead className="w-[100px]">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.items.map((p) => (
-                <TableRow key={p.id}>
-                  <TableCell className="font-medium">{p.name}</TableCell>
-                  <TableCell className="text-muted-foreground max-w-[200px] truncate">
-                    {p.description ?? '—'}
-                  </TableCell>
-                  <TableCell>{p.chatbotCount}</TableCell>
-                  <TableCell>
-                    <Link href={`/projects/${p.id}`}>
-                      <Button variant="outline" size="sm">
-                        Open
-                      </Button>
-                    </Link>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {data.items.map((p) => (
+              <Link
+                key={p.id}
+                href={`/projects/${p.id}`}
+                className={cn(
+                  'group relative flex flex-col rounded-2xl border bg-card p-5 shadow-sm',
+                  'transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/20 hover:shadow-lg hover:shadow-primary/5'
+                )}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div
+                    className={cn(
+                      'flex size-12 shrink-0 items-center justify-center rounded-xl',
+                      'bg-primary/10 text-primary transition-colors group-hover:bg-primary/15'
+                    )}
+                  >
+                    <ProjectIcon iconKey={p.icon ?? undefined} className="size-6" size={24} />
+                  </div>
+                  <span
+                    className={cn(
+                      'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium',
+                      'bg-muted/80 text-muted-foreground'
+                    )}
+                  >
+                    <MessageSquare className="size-3.5" />
+                    {p.chatbotCount}
+                  </span>
+                </div>
+                <h3 className="mt-4 font-semibold text-foreground line-clamp-1 group-hover:text-primary">
+                  {p.name}
+                </h3>
+                <p className="mt-1 min-h-10 text-sm leading-relaxed text-muted-foreground line-clamp-2">
+                  {p.description?.trim() || 'No description'}
+                </p>
+                <div className="mt-4 flex items-center gap-2 text-sm font-medium text-primary">
+                  <span>Open</span>
+                  <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+                </div>
+              </Link>
+            ))}
+          </div>
+
           {totalPages > 1 && (
-            <div className="p-4 border-t">
+            <div className="flex items-center justify-center pt-4">
               <Pagination>
-                <PaginationContent>
+                <PaginationContent className="gap-1">
                   <PaginationItem>
                     <PaginationPrevious
                       href="#"
@@ -146,11 +160,14 @@ export function ProjectsList() {
                         if (hasPrev) setPage((p) => p - 1);
                       }}
                       aria-disabled={!hasPrev}
-                      className={!hasPrev ? 'pointer-events-none opacity-50' : ''}
+                      className={cn(
+                        'rounded-lg',
+                        !hasPrev && 'pointer-events-none opacity-50'
+                      )}
                     />
                   </PaginationItem>
                   <PaginationItem>
-                    <span className="px-2 text-sm text-muted-foreground">
+                    <span className="px-3 text-sm text-muted-foreground">
                       Page {page} of {totalPages}
                     </span>
                   </PaginationItem>
@@ -162,7 +179,10 @@ export function ProjectsList() {
                         if (hasNext) setPage((p) => p + 1);
                       }}
                       aria-disabled={!hasNext}
-                      className={!hasNext ? 'pointer-events-none opacity-50' : ''}
+                      className={cn(
+                        'rounded-lg',
+                        !hasNext && 'pointer-events-none opacity-50'
+                      )}
                     />
                   </PaginationItem>
                 </PaginationContent>
