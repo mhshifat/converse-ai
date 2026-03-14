@@ -67,6 +67,16 @@ export interface ChatbotWidgetConfig {
   showPoweredBy: boolean;
   /** Rating after conversation: 'thumbs' (up/down) or 'nps' (0-10). */
   defaultRatingType: 'thumbs' | 'nps';
+  /** Show a welcome message bubble on first page visit (session). */
+  proactiveWelcomeEnabled?: boolean;
+  /** Delay in seconds before showing the first-visit welcome bubble. 0 = immediately. */
+  proactiveWelcomeDelaySeconds?: number;
+  /** Status line under the greeting (e.g. "Our team is online"). */
+  proactiveWelcomeStatus?: string;
+  /** CTA button label (e.g. "Chat with us"). Click opens the chat. */
+  proactiveWelcomeCtaLabel?: string;
+  /** Optional avatar image URL shown on the welcome card (e.g. support agent photo). */
+  proactiveWelcomeAvatarUrl?: string;
   bubble: BubbleConfig;
   popup: PopupConfig;
   header: HeaderConfig;
@@ -130,6 +140,11 @@ export const DEFAULT_WIDGET_CONFIG: ChatbotWidgetConfig = {
   voiceEnabled: false,
   showPoweredBy: true,
   defaultRatingType: 'thumbs',
+  proactiveWelcomeEnabled: false,
+  proactiveWelcomeDelaySeconds: 0,
+  proactiveWelcomeStatus: '',
+  proactiveWelcomeCtaLabel: 'Chat with us',
+  proactiveWelcomeAvatarUrl: undefined,
   bubble: defaultBubble,
   popup: defaultPopup,
   header: defaultHeader,
@@ -149,6 +164,11 @@ export function mergeWidgetConfig(
     voiceEnabled: (c.voiceEnabled as boolean) ?? DEFAULT_WIDGET_CONFIG.voiceEnabled,
     showPoweredBy: (c.showPoweredBy as boolean) ?? DEFAULT_WIDGET_CONFIG.showPoweredBy,
     defaultRatingType: (c.defaultRatingType as 'thumbs' | 'nps') ?? DEFAULT_WIDGET_CONFIG.defaultRatingType,
+    proactiveWelcomeEnabled: (c.proactiveWelcomeEnabled as boolean) ?? DEFAULT_WIDGET_CONFIG.proactiveWelcomeEnabled,
+    proactiveWelcomeDelaySeconds: (c.proactiveWelcomeDelaySeconds as number) ?? DEFAULT_WIDGET_CONFIG.proactiveWelcomeDelaySeconds,
+    proactiveWelcomeStatus: (c.proactiveWelcomeStatus as string) ?? DEFAULT_WIDGET_CONFIG.proactiveWelcomeStatus,
+    proactiveWelcomeCtaLabel: (c.proactiveWelcomeCtaLabel as string) ?? DEFAULT_WIDGET_CONFIG.proactiveWelcomeCtaLabel,
+    proactiveWelcomeAvatarUrl: (c.proactiveWelcomeAvatarUrl as string | undefined) ?? DEFAULT_WIDGET_CONFIG.proactiveWelcomeAvatarUrl,
     bubble: { ...defaultBubble, ...(c.bubble as Partial<BubbleConfig>) },
     popup: { ...defaultPopup, ...(c.popup as Partial<PopupConfig>) },
     header: { ...defaultHeader, ...(c.header as Partial<HeaderConfig>) },
@@ -166,6 +186,11 @@ export function widgetConfigToStorage(config: ChatbotWidgetConfig): Record<strin
     voiceEnabled: config.voiceEnabled,
     showPoweredBy: config.showPoweredBy,
     defaultRatingType: config.defaultRatingType,
+    proactiveWelcomeEnabled: config.proactiveWelcomeEnabled,
+    proactiveWelcomeDelaySeconds: config.proactiveWelcomeDelaySeconds,
+    proactiveWelcomeStatus: config.proactiveWelcomeStatus,
+    proactiveWelcomeCtaLabel: config.proactiveWelcomeCtaLabel,
+    proactiveWelcomeAvatarUrl: config.proactiveWelcomeAvatarUrl,
     bubble: config.bubble,
     popup: config.popup,
     header: config.header,

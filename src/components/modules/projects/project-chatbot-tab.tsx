@@ -28,7 +28,7 @@ import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { cn } from '@/lib/utils';
 
 const DEBOUNCE_MS = 400;
-const PREVIEW_DEBOUNCE_MS = 180;
+const PREVIEW_DEBOUNCE_MS = 100;
 
 interface ProjectChatbotTabProps {
   projectId: string;
@@ -248,6 +248,48 @@ export function ProjectChatbotTab({ projectId, initialChatbot }: ProjectChatbotT
             />
             <Label>Enable voice (call)</Label>
           </div>
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={config.proactiveWelcomeEnabled ?? false}
+              onCheckedChange={(v) => patch('proactiveWelcomeEnabled' as keyof ChatbotWidgetConfig, v)}
+            />
+            <Label>Show welcome message on first visit</Label>
+          </div>
+          {(config.proactiveWelcomeEnabled ?? false) && (
+            <>
+              <Field label="Welcome delay (seconds)">
+                <Input
+                  type="number"
+                  min={0}
+                  max={30}
+                  value={config.proactiveWelcomeDelaySeconds ?? 0}
+                  onChange={(e) => patch('proactiveWelcomeDelaySeconds' as keyof ChatbotWidgetConfig, Math.max(0, Number(e.target.value) || 0))}
+                  placeholder="0 = immediately"
+                />
+              </Field>
+              <Field label="Status line (optional)">
+                <Input
+                  value={config.proactiveWelcomeStatus ?? ''}
+                  onChange={(e) => patch('proactiveWelcomeStatus' as keyof ChatbotWidgetConfig, e.target.value)}
+                  placeholder="e.g. Our team is online"
+                />
+              </Field>
+              <Field label="CTA button label">
+                <Input
+                  value={config.proactiveWelcomeCtaLabel ?? 'Chat with us'}
+                  onChange={(e) => patch('proactiveWelcomeCtaLabel' as keyof ChatbotWidgetConfig, e.target.value || 'Chat with us')}
+                  placeholder="Chat with us"
+                />
+              </Field>
+              <Field label="Avatar URL (optional)">
+                <Input
+                  value={config.proactiveWelcomeAvatarUrl ?? ''}
+                  onChange={(e) => patch('proactiveWelcomeAvatarUrl' as keyof ChatbotWidgetConfig, e.target.value || undefined)}
+                  placeholder="https://… (agent/support photo)"
+                />
+              </Field>
+            </>
+          )}
         </Section>
 
         {/* Bubble */}

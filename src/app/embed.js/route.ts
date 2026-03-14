@@ -60,12 +60,18 @@ const EMBED_SCRIPT = `
     primaryColor: '#2563eb',
     welcomeMessage: 'How can I help?',
     position: 'bottom-right',
+    voiceEnabled: false,
     showPoweredBy: true,
+    proactiveWelcomeEnabled: false,
+    proactiveWelcomeDelaySeconds: 0,
+    proactiveWelcomeStatus: '',
+    proactiveWelcomeCtaLabel: 'Chat with us',
+    proactiveWelcomeAvatarUrl: undefined,
     name: 'Chat',
     bubble: { size: 56, borderRadius: 50, backgroundColor: '#2563eb', iconColor: '#ffffff', shadow: '0 4px 12px rgba(0,0,0,0.15)' },
     popup: { width: 380, height: 420, borderRadius: 16, shadow: '0 8px 32px rgba(0,0,0,0.12)', backgroundColor: '#ffffff' },
     header: { backgroundColor: '#ffffff', textColor: '#111111', fontSize: 16, title: 'Chat', showCloseButton: true, logoSize: 28 },
-    footer: { borderColor: '#eeeeee', inputPlaceholder: 'Type a message...', inputBackground: '#ffffff', inputTextColor: '#111111', inputBorderRadius: 8, sendButtonBackground: '#2563eb', sendButtonTextColor: '#ffffff', sendButtonBorderRadius: 8 },
+    footer: { backgroundColor: '#ffffff', borderColor: '#eeeeee', inputPlaceholder: 'Type a message...', inputBackground: '#ffffff', inputTextColor: '#111111', inputBorderRadius: 8, sendButtonBackground: '#2563eb', sendButtonTextColor: '#ffffff', sendButtonBorderRadius: 8 },
     messages: { welcomeTextColor: '#666666', userBubbleBackground: '#2563eb', userBubbleTextColor: '#ffffff', agentBubbleBackground: '#f0f0f0', agentBubbleTextColor: '#111111', bubbleBorderRadius: 12, fontSize: 14 }
   };
   var messages = [];
@@ -73,8 +79,16 @@ const EMBED_SCRIPT = `
   var panel = null;
   var listEl = null;
   var handoffMode = false;
+  var assignedHumanAgentId = null;
+  var handoffStatusEl = null;
   var conversationEnded = false;
   var pollIntervalId = null;
+  function updateHandoffStatus() {
+    if (!handoffStatusEl) return;
+    if (!handoffMode) { handoffStatusEl.style.display = 'none'; handoffStatusEl.textContent = ''; return; }
+    handoffStatusEl.style.display = 'block';
+    handoffStatusEl.textContent = assignedHumanAgentId ? 'Connected to support agent' : 'Looking for an agent... Please hold.';
+  }
   function startHandoffPolling() {
     if (pollIntervalId) return;
     pollIntervalId = setInterval(function() {
@@ -83,6 +97,8 @@ const EMBED_SCRIPT = `
         var data = res && res.result && res.result.data && res.result.data.json;
         if (!data || !data.messages) return;
         handoffMode = data.handoffRequested || !!data.assignedHumanAgentId;
+        assignedHumanAgentId = data.assignedHumanAgentId || null;
+        updateHandoffStatus();
         if (data.messages.length !== messages.length) {
           messages = data.messages.map(function(m) { return { sender: m.senderType, content: m.content }; });
           if (listEl) {
@@ -108,8 +124,93 @@ const EMBED_SCRIPT = `
     if (document.getElementById('converseai-widget-styles')) return;
     var style = document.createElement('style');
     style.id = 'converseai-widget-styles';
-    style.textContent = '#converseai-root .cai-msg-user{animation: cai-in-u .3s ease-out both}#converseai-root .cai-msg-agent{animation: cai-in-a .3s ease-out both}@keyframes cai-in-u{from{opacity:0;transform:translateX(8px) scale(.96)}to{opacity:1;transform:translateX(0) scale(1)}}@keyframes cai-in-a{from{opacity:0;transform:translateX(-8px) scale(.96)}to{opacity:1;transform:translateX(0) scale(1)}}@keyframes cai-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.7;transform:scale(1.2)}}';
+    style.textContent = '#converseai-root .cai-msg-user{animation: cai-in-u .3s ease-out both}#converseai-root .cai-msg-agent{animation: cai-in-a .3s ease-out both}@keyframes cai-in-u{from{opacity:0;transform:translateX(8px) scale(.96)}to{opacity:1;transform:translateX(0) scale(1)}}@keyframes cai-in-a{from{opacity:0;transform:translateX(-8px) scale(.96)}to{opacity:1;transform:translateX(0) scale(1)}}@keyframes cai-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.7;transform:scale(1.2)}}@keyframes cai-welcome-in{from{opacity:0;transform:translateY(12px) scale(0.96)}to{opacity:1;transform:translateY(0) scale(1)}}';
     document.head.appendChild(style);
+  }
+
+  var welcomeCardEl = null;
+  function showProactiveWelcome() {
+    if (sessionStorage.getItem('converseai_welcome_shown') === '1') return;
+    if (!root || welcomeCardEl) return;
+    var p = config.popup || {};
+    var m = config.messages || {};
+    var f = config.footer || {};
+    var b = config.bubble || {};
+    var bubbleSize = b.size || 56;
+    var primary = config.primaryColor || '#2563eb';
+    var pos = config.position || 'bottom-right';
+    var offset = bubbleSize + 10;
+    var textColor = m.welcomeTextColor || '#333';
+    var textColorMuted = 'rgba(0,0,0,0.55)';
+    welcomeCardEl = document.createElement('div');
+    welcomeCardEl.setAttribute('aria-live', 'polite');
+    welcomeCardEl.setAttribute('role', 'status');
+    var cardStyle = 'width:320px;max-width:calc(100vw - 48px);background:' + (p.backgroundColor || '#fff') + ';border-radius:' + (Math.min((p.borderRadius || 16), 28)) + 'px;box-shadow:0 24px 48px -12px rgba(0,0,0,0.18),0 12px 24px -8px rgba(0,0,0,0.1),0 0 0 1px rgba(0,0,0,0.04);border-top:3px solid ' + primary + ';animation:cai-welcome-in .4s cubic-bezier(0.34,1.56,0.64,1) both;position:absolute;z-index:2;overflow:hidden;';
+    if (pos === 'bottom-right') cardStyle += 'bottom:' + offset + 'px;right:0;';
+    else if (pos === 'bottom-left') cardStyle += 'bottom:' + offset + 'px;left:0;';
+    else if (pos === 'top-right') cardStyle += 'top:' + offset + 'px;right:0;';
+    else cardStyle += 'top:' + offset + 'px;left:0;';
+    welcomeCardEl.style.cssText = cardStyle;
+    var topRow = document.createElement('div');
+    topRow.style.cssText = 'display:flex;align-items:flex-start;gap:14px;padding:18px 18px 0 18px;';
+    var closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.setAttribute('aria-label', 'Dismiss');
+    closeBtn.innerHTML = '&times;';
+    closeBtn.style.cssText = 'flex-shrink:0;width:28px;height:28px;padding:0;border:none;background:transparent;color:' + textColor + ';opacity:0.5;font-size:20px;line-height:1;cursor:pointer;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:opacity .2s, background .2s;';
+    closeBtn.onmouseenter = function() { closeBtn.style.opacity = '1'; closeBtn.style.background = 'rgba(0,0,0,.06)'; };
+    closeBtn.onmouseleave = function() { closeBtn.style.opacity = '0.5'; closeBtn.style.background = 'transparent'; };
+    closeBtn.onclick = function() {
+      try { sessionStorage.setItem('converseai_welcome_shown', '1'); } catch (e) {}
+      if (welcomeCardEl && welcomeCardEl.parentNode) welcomeCardEl.parentNode.removeChild(welcomeCardEl);
+      welcomeCardEl = null;
+    };
+    topRow.appendChild(closeBtn);
+    var textBlock = document.createElement('div');
+    textBlock.style.cssText = 'flex:1;min-width:0;padding-top:2px;';
+    var headline = document.createElement('div');
+    headline.style.cssText = 'color:' + textColor + ';font-size:' + (m.fontSize ? m.fontSize + 2 : 17) + 'px;font-weight:700;line-height:1.3;margin-bottom:6px;letter-spacing:-0.01em;';
+    headline.textContent = config.welcomeMessage || 'Do you have any question?';
+    textBlock.appendChild(headline);
+    if (config.proactiveWelcomeStatus) {
+      var statusLine = document.createElement('div');
+      statusLine.style.cssText = 'color:' + textColorMuted + ';font-size:' + (m.fontSize || 14) + 'px;line-height:1.4;';
+      statusLine.textContent = config.proactiveWelcomeStatus;
+      textBlock.appendChild(statusLine);
+    }
+    topRow.appendChild(textBlock);
+    if (config.proactiveWelcomeAvatarUrl) {
+      var avatar = document.createElement('img');
+      avatar.src = config.proactiveWelcomeAvatarUrl;
+      avatar.alt = '';
+      avatar.style.cssText = 'width:48px;height:48px;border-radius:50%;object-fit:cover;flex-shrink:0;';
+      topRow.appendChild(avatar);
+    }
+    welcomeCardEl.appendChild(topRow);
+    var divider = document.createElement('div');
+    divider.style.cssText = 'height:1px;background:' + (f.borderColor || 'rgba(0,0,0,0.06)') + ';margin:16px 18px 0 18px;';
+    welcomeCardEl.appendChild(divider);
+    var ctaWrap = document.createElement('div');
+    ctaWrap.style.cssText = 'padding:16px 18px 18px;text-align:center;';
+    var ctaBtn = document.createElement('button');
+    ctaBtn.type = 'button';
+    ctaBtn.textContent = config.proactiveWelcomeCtaLabel || 'Chat with us';
+    ctaBtn.style.cssText = 'width:100%;padding:12px 20px;border:none;border-radius:12px;background:' + primary + ';color:#fff;font-size:' + (m.fontSize || 14) + 'px;font-weight:600;cursor:pointer;letter-spacing:0.02em;box-shadow:0 4px 14px ' + primary + '40;transition:transform .2s, box-shadow .2s, opacity .2s;';
+    ctaBtn.onmouseenter = function() { ctaBtn.style.transform = 'translateY(-1px)'; ctaBtn.style.boxShadow = '0 6px 20px ' + primary + '50'; };
+    ctaBtn.onmouseleave = function() { ctaBtn.style.transform = 'translateY(0)'; ctaBtn.style.boxShadow = '0 4px 14px ' + primary + '40'; };
+    ctaBtn.onclick = function() {
+      try { sessionStorage.setItem('converseai_welcome_shown', '1'); } catch (e) {}
+      if (welcomeCardEl && welcomeCardEl.parentNode) welcomeCardEl.parentNode.removeChild(welcomeCardEl);
+      welcomeCardEl = null;
+      openPanel();
+    };
+    ctaWrap.appendChild(ctaBtn);
+    welcomeCardEl.appendChild(ctaWrap);
+    root.appendChild(welcomeCardEl);
+  }
+  function hideProactiveWelcome() {
+    if (welcomeCardEl && welcomeCardEl.parentNode) welcomeCardEl.parentNode.removeChild(welcomeCardEl);
+    welcomeCardEl = null;
   }
 
   function render() {
@@ -160,6 +261,7 @@ const EMBED_SCRIPT = `
   }
 
   function openPanel() {
+    hideProactiveWelcome();
     if (panel) { panel.style.display = 'flex'; return; }
     var p = config.popup || {};
     var h = config.header || {};
@@ -309,6 +411,7 @@ const EMBED_SCRIPT = `
           }
           if (result && result.handoffRequested) {
             handoffMode = true;
+            updateHandoffStatus();
             startHandoffPolling();
           }
           if (result && result.conversationEnded) showConversationEnded();
@@ -327,6 +430,7 @@ const EMBED_SCRIPT = `
           }
           if (result && result.handoffRequested) {
             handoffMode = true;
+            updateHandoffStatus();
             startHandoffPolling();
           }
           if (result && result.conversationEnded) showConversationEnded();
@@ -351,6 +455,10 @@ const EMBED_SCRIPT = `
     voiceRow.appendChild(voiceBtn);
     voiceRow.appendChild(voiceLabel);
     footerWrap.appendChild(voiceRow);
+    handoffStatusEl = document.createElement('div');
+    handoffStatusEl.style.cssText = 'margin-top:8px;text-align:center;font-size:12px;color:#666;display:none;';
+    footerWrap.appendChild(handoffStatusEl);
+    updateHandoffStatus();
     if (config.showPoweredBy !== false) {
       var poweredBy = document.createElement('div');
       poweredBy.style.cssText = 'margin-top:8px;text-align:center;';
@@ -376,7 +484,12 @@ const EMBED_SCRIPT = `
     if (conversationId) {
       trpcQuery('widget.getMessages', { conversationId: conversationId }).then(function(res) {
         var data = res && res.result && res.result.data && res.result.data.json;
-        if (data && (data.handoffRequested || data.assignedHumanAgentId)) { handoffMode = true; startHandoffPolling(); }
+        if (data && (data.handoffRequested || data.assignedHumanAgentId)) {
+          handoffMode = true;
+          assignedHumanAgentId = data.assignedHumanAgentId || null;
+          updateHandoffStatus();
+          startHandoffPolling();
+        }
       });
     }
   }
@@ -422,10 +535,19 @@ const EMBED_SCRIPT = `
         if (c.messages) config.messages = merge(c.messages, config.messages);
         if (c.proactiveDelaySeconds != null) config.proactiveDelaySeconds = c.proactiveDelaySeconds;
         if (c.proactiveOnExitIntent != null) config.proactiveOnExitIntent = c.proactiveOnExitIntent;
+        if (c.proactiveWelcomeEnabled != null) config.proactiveWelcomeEnabled = c.proactiveWelcomeEnabled;
+        if (c.proactiveWelcomeDelaySeconds != null) config.proactiveWelcomeDelaySeconds = c.proactiveWelcomeDelaySeconds;
+        if (c.proactiveWelcomeStatus != null) config.proactiveWelcomeStatus = c.proactiveWelcomeStatus;
+        if (c.proactiveWelcomeCtaLabel != null) config.proactiveWelcomeCtaLabel = c.proactiveWelcomeCtaLabel;
+        if (c.proactiveWelcomeAvatarUrl != null) config.proactiveWelcomeAvatarUrl = c.proactiveWelcomeAvatarUrl;
       }
     }
     render();
     if (openPanelOnLoad) openPanel();
+    if (config.proactiveWelcomeEnabled && !openPanelOnLoad) {
+      var delayMs = (config.proactiveWelcomeDelaySeconds || 0) * 1000;
+      setTimeout(function() { if (root && !panel) showProactiveWelcome(); }, delayMs);
+    }
     if (config.proactiveDelaySeconds > 0) {
       setTimeout(function() { if (root && !panel) openPanel(); }, config.proactiveDelaySeconds * 1000);
     }

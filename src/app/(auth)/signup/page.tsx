@@ -1,5 +1,13 @@
+import { buildMetadata } from '@/lib/seo';
 import { SignUpForm } from '@/components/modules/auth/sign-up-form';
 import { SignupBrandPanel } from '@/components/modules/auth/signup-brand-panel';
+
+export const metadata = buildMetadata({
+  path: '/signup',
+  title: 'Sign Up',
+  description: 'Create your ConverseAI account and start building AI chatbots.',
+  noIndex: true,
+});
 
 export default function SignUpPage() {
   return (

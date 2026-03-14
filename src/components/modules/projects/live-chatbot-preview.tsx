@@ -134,6 +134,7 @@ export function LiveChatbotPreview({
   const silenceStartRef = useRef<number | null>(null);
   const isPlayingAgentAudioRef = useRef(false);
   const lastHandoffMessageCountRef = useRef(0);
+  const handoffMessagesSyncRef = useRef<string | null>(null);
   const handoffTtsInitializedRef = useRef(false);
   type PendingVoiceItem = { type: 'tts'; text: string } | { type: 'audio'; url: string };
   const pendingTtsQueueRef = useRef<PendingVoiceItem[]>([]);
@@ -146,6 +147,7 @@ export function LiveChatbotPreview({
   const endedRef = useRef(false);
   const lastTtsTextRef = useRef('');
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+  const stopAllAudioRef = useRef<() => void>(() => {});
   conversationIdRef.current = conversationId;
   modeRef.current = mode;
   isPlayingAgentAudioRef.current = isPlayingAgentAudio;
@@ -155,9 +157,9 @@ export function LiveChatbotPreview({
   const { bubble, popup, header, footer, messages: msgCfg } = config;
   const logoSize = header.logoSize ?? 28;
   const primary = config.primaryColor ?? '#2563eb';
-  const bubbleBg = bubble.backgroundColor ?? primary;
-  const userBubbleBg = msgCfg.userBubbleBackground ?? primary;
-  const sendBtnBg = footer.sendButtonBackground ?? primary;
+  const bubbleBg = bubble.backgroundColor || primary;
+  const userBubbleBg = msgCfg.userBubbleBackground || primary;
+  const sendBtnBg = footer.sendButtonBackground || primary;
 
   const sendFirstMessage = trpc.widget.sendFirstMessage.useMutation({
     onSuccess: (data) => {
@@ -349,6 +351,7 @@ export function LiveChatbotPreview({
   useEffect(() => {
     if (!handoffRequested) {
       lastHandoffMessageCountRef.current = 0;
+      handoffMessagesSyncRef.current = null;
       handoffTtsInitializedRef.current = false;
       pendingTtsQueueRef.current = [];
     }
@@ -357,6 +360,9 @@ export function LiveChatbotPreview({
   useEffect(() => {
     if (!handoffRequested || !handoffMessages?.messages) return;
     const list = handoffMessages.messages;
+    const signature = list.length + '|' + list.map((m) => m.content).join('\0');
+    if (handoffMessagesSyncRef.current === signature) return;
+    handoffMessagesSyncRef.current = signature;
     setMessages(
       list.map((m) => ({
         role: m.senderType === 'customer' ? 'customer' : ('agent' as 'agent'),
@@ -683,6 +689,10 @@ export function LiveChatbotPreview({
     pendingTtsQueueRef.current = [];
   }, []);
 
+  useEffect(() => {
+    stopAllAudioRef.current = stopAllAudio;
+  }, [stopAllAudio]);
+
   const endVoiceCall = useCallback(() => {
     stopAllAudio();
     if (silenceCheckIntervalRef.current) {
@@ -771,7 +781,6 @@ export function LiveChatbotPreview({
       const dataArray = new Uint8Array(analyser.frequencyBinCount);
 
       silenceCheckIntervalRef.current = setInterval(() => {
-        if (isPlayingAgentAudioRef.current) return;
         const rec = mediaRecorderRef.current;
         const anal = analyserRef.current;
         if (!rec || rec.state !== 'recording' || !anal) return;
@@ -783,6 +792,16 @@ export function LiveChatbotPreview({
           sum += n * n;
         }
         const rms = Math.sqrt(sum / dataArray.length);
+
+        // Barge-in: when user starts speaking while agent is playing, stop agent and listen
+        if (rms > VOICE_VOLUME_THRESHOLD && isPlayingAgentAudioRef.current) {
+          stopAllAudioRef.current();
+          hasSpeechRef.current = true;
+          silenceStartRef.current = null;
+          doRestartRecorder();
+          return;
+        }
+        if (isPlayingAgentAudioRef.current) return;
 
         if (rms > VOICE_VOLUME_THRESHOLD) {
           hasSpeechRef.current = true;
@@ -1305,7 +1324,11 @@ export function LiveChatbotPreview({
                         className="mt-2 text-center text-xs"
                         style={{ color: msgCfg.welcomeTextColor }}
                       >
-                        {liveVoiceConnected ? 'Agent is speaking live' : 'Connected to support agent'}
+                        {liveVoiceConnected
+                          ? 'Agent is speaking live'
+                          : handoffMessages?.assignedHumanAgentId
+                            ? 'Connected to support agent'
+                            : 'Looking for an agent... Please hold.'}
                       </p>
                     )}
                   </div>

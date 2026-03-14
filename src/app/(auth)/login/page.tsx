@@ -1,5 +1,13 @@
+import { buildMetadata } from '@/lib/seo';
 import { LoginForm } from '@/components/modules/auth/login-form';
 import { SignupBrandPanel } from '@/components/modules/auth/signup-brand-panel';
+
+export const metadata = buildMetadata({
+  path: '/login',
+  title: 'Sign In',
+  description: 'Sign in to your ConverseAI account.',
+  noIndex: true,
+});
 
 export default function LoginPage() {
   return (

@@ -24,12 +24,15 @@ interface ChatbotPreviewProps {
 export const ChatbotPreview = React.memo(function ChatbotPreview({ config, className }: ChatbotPreviewProps) {
   const [open, setOpen] = useState(true);
   const [mode, setMode] = useState<'chat' | 'voice'>('chat');
+  const [welcomeDismissed, setWelcomeDismissed] = useState(false);
   const { bubble, popup, header, footer, messages } = config;
+  const showProactiveWelcome = (config.proactiveWelcomeEnabled ?? false) && !welcomeDismissed;
   const logoSize = header.logoSize ?? 28;
   const primary = config.primaryColor ?? '#2563eb';
-  const bubbleBg = bubble.backgroundColor ?? primary;
-  const userBubbleBg = messages.userBubbleBackground ?? primary;
-  const sendBtnBg = footer.sendButtonBackground ?? primary;
+  // Use primary when section value is unset or empty so primary color change always reflects
+  const bubbleBg = bubble.backgroundColor || primary;
+  const userBubbleBg = messages.userBubbleBackground || primary;
+  const sendBtnBg = footer.sendButtonBackground || primary;
 
   const viewportPosition = {
     'bottom-right': 'items-end justify-end',
@@ -52,6 +55,70 @@ export const ChatbotPreview = React.memo(function ChatbotPreview({ config, class
       <p className="absolute left-3 top-3 text-xs font-medium text-muted-foreground">Live preview</p>
       <div className={cn('absolute inset-0 flex p-6', viewportPosition[config.position])}>
         <div className={cn('absolute', widgetPosition[config.position])}>
+          {/* Proactive welcome card (first visit) - modern, eye-catching */}
+          {showProactiveWelcome && (
+            <div
+              className="absolute z-10 w-[320px] max-w-[calc(100vw-48px)] overflow-hidden rounded-[28px]"
+              style={{
+                backgroundColor: popup.backgroundColor,
+                boxShadow: '0 24px 48px -12px rgba(0,0,0,0.18), 0 12px 24px -8px rgba(0,0,0,0.1), 0 0 0 1px rgba(0,0,0,0.04)',
+                borderTop: `3px solid ${primary}`,
+                animation: 'chat-welcome-in 0.4s cubic-bezier(0.34,1.56,0.64,1) both',
+                ...(config.position.includes('bottom')
+                  ? { bottom: bubble.size + 10, right: config.position === 'bottom-right' ? 0 : undefined, left: config.position === 'bottom-left' ? 0 : undefined }
+                  : { top: bubble.size + 10, right: config.position === 'top-right' ? 0 : undefined, left: config.position === 'top-left' ? 0 : undefined }),
+              }}
+              role="status"
+              aria-live="polite"
+            >
+              <div className="flex items-start gap-3.5 px-[18px] pt-[18px]">
+                <button
+                  type="button"
+                  onClick={() => setWelcomeDismissed(true)}
+                  className="flex size-7 shrink-0 items-center justify-center rounded-full opacity-50 transition-colors hover:opacity-100 hover:bg-black/5"
+                  style={{ color: messages.welcomeTextColor }}
+                  aria-label="Dismiss"
+                >
+                  <X className="size-5" />
+                </button>
+                <div className="min-w-0 flex-1 pt-0.5">
+                  <p
+                    className="font-bold leading-tight tracking-tight"
+                    style={{ color: messages.welcomeTextColor, fontSize: (messages.fontSize ?? 14) + 3 }}
+                  >
+                    {config.welcomeMessage}
+                  </p>
+                  {(config.proactiveWelcomeStatus ?? '') && (
+                    <p className="mt-1.5 text-sm text-black/55" style={{ fontSize: messages.fontSize }}>
+                      {config.proactiveWelcomeStatus}
+                    </p>
+                  )}
+                </div>
+                {(config.proactiveWelcomeAvatarUrl ?? '') && (
+                  <img
+                    src={config.proactiveWelcomeAvatarUrl}
+                    alt=""
+                    className="size-12 shrink-0 rounded-full object-cover ring-2 ring-white/80 shadow-sm"
+                  />
+                )}
+              </div>
+              <div className="mt-4 border-t border-black/6" />
+              <div className="px-[18px] py-4 text-center">
+                <button
+                  type="button"
+                  onClick={() => { setWelcomeDismissed(true); setOpen(true); }}
+                  className="w-full rounded-xl py-3 px-5 font-semibold text-white tracking-wide transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+                  style={{
+                    backgroundColor: primary,
+                    fontSize: messages.fontSize,
+                    boxShadow: `0 4px 14px ${primary}40`,
+                  }}
+                >
+                  {config.proactiveWelcomeCtaLabel ?? 'Chat with us'}
+                </button>
+              </div>
+            </div>
+          )}
           {/* Bubble */}
           <button
             type="button"
