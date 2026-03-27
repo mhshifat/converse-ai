@@ -48,10 +48,19 @@ export function ProjectChatbotTab({ projectId, initialChatbot }: ProjectChatbotT
   const [logoUploading, setLogoUploading] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const debouncedConfig = useDebouncedValue(config, PREVIEW_DEBOUNCE_MS);
+  /** Only hydrate local `config` from server when switching chatbots — not after each save (new config ref would retrigger persist in a loop). */
+  const syncedServerConfigForChatbotIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    setConfig(mergeWidgetConfig(chatbot?.config));
-  }, [chatbot?.config]);
+    syncedServerConfigForChatbotIdRef.current = null;
+  }, [projectId]);
+
+  useEffect(() => {
+    if (!chatbot?.id) return;
+    if (syncedServerConfigForChatbotIdRef.current === chatbot.id) return;
+    syncedServerConfigForChatbotIdRef.current = chatbot.id;
+    setConfig(mergeWidgetConfig(chatbot.config));
+  }, [chatbot]);
 
   const getOrCreate = trpc.chatbot.getOrCreateForProject.useMutation({
     onSuccess: (data) => setChatbot(data),
