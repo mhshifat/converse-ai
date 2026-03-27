@@ -890,7 +890,7 @@ const EMBED_SCRIPT = `
   function caiInlineMarkdownToSafeHtml(line) {
     var s = caiEscapeHtml(line);
     s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-    s = s.replace(/`([^`]+)`/g, '<code style="font-size:0.92em;padding:0.12em 0.35em;border-radius:4px;background:rgba(0,0,0,0.07)">$1</code>');
+    s = s.replace(/\`([^\`]+)\`/g, '<code style="font-size:0.92em;padding:0.12em 0.35em;border-radius:4px;background:rgba(0,0,0,0.07)">$1</code>');
     s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, function (_, label, url) {
       var h = caiSafeMarkdownHref(url);
       if (!h) return label;
