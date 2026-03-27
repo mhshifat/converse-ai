@@ -41,6 +41,7 @@ export async function listProjects(input: ListProjectsInput) {
       name: p.name,
       description: p.description,
       icon: p.icon,
+      logoUrl: p.logo_url,
       dataSchema: p.data_schema,
       deliveryIntegrationIds: p.delivery_integration_ids,
       createdAt: p.created_at,
@@ -68,6 +69,7 @@ export async function getProjectById(projectId: string, tenantId: string) {
     name: project.name,
     description: project.description,
     icon: project.icon,
+    logoUrl: project.logo_url,
     dataSchema: project.data_schema,
     deliveryIntegrationIds: project.delivery_integration_ids,
     conversationMode: (project.conversation_mode as 'human_only' | 'ai_only' | 'both') ?? 'both',
@@ -99,6 +101,7 @@ export async function createProject(data: {
   name: string;
   description?: string;
   icon?: string | null;
+  logoUrl?: string | null;
 }) {
   const project = await prisma.project.create({
     data: {
@@ -106,6 +109,7 @@ export async function createProject(data: {
       name: data.name,
       description: data.description ?? null,
       icon: data.icon ?? null,
+      logo_url: data.logoUrl ?? null,
     },
   });
   return {
@@ -114,6 +118,7 @@ export async function createProject(data: {
     name: project.name,
     description: project.description,
     icon: project.icon,
+    logoUrl: project.logo_url,
     dataSchema: project.data_schema,
     deliveryIntegrationIds: project.delivery_integration_ids,
     createdAt: project.created_at,
@@ -128,6 +133,7 @@ export async function updateProject(
     name?: string;
     description?: string;
     icon?: string | null;
+    logoUrl?: string | null;
     dataSchema?: unknown;
     deliveryIntegrationIds?: string[];
     conversationMode?: 'human_only' | 'ai_only' | 'both';
@@ -153,6 +159,7 @@ export async function updateProject(
       ...(data.name !== undefined && { name: data.name }),
       ...(data.description !== undefined && { description: data.description }),
       ...(data.icon !== undefined && { icon: data.icon }),
+      ...(data.logoUrl !== undefined && { logo_url: data.logoUrl }),
       ...(data.dataSchema !== undefined && { data_schema: data.dataSchema as object }),
       ...(data.deliveryIntegrationIds !== undefined && {
         delivery_integration_ids: data.deliveryIntegrationIds,
@@ -175,6 +182,7 @@ export async function updateProject(
     name: updated.name,
     description: updated.description,
     icon: updated.icon,
+    logoUrl: updated.logo_url,
     dataSchema: updated.data_schema,
     deliveryIntegrationIds: updated.delivery_integration_ids,
     conversationMode: (updated.conversation_mode as 'human_only' | 'ai_only' | 'both') ?? 'both',

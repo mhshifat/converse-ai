@@ -11,12 +11,19 @@ export const liveChatRouter = router({
     .query(async ({ ctx, input }) => {
       return withCorrelationError('liveChat.listHandoffConversations', async () => {
         const isHuman = await humanAgentRepo.isHumanAgent(ctx.user.id, ctx.user.tenantId);
-        if (!isHuman) return { unassigned: [], myAssigned: [] };
-        return conversationService.listHandoffConversationsForHuman(
+        if (!isHuman) {
+          return {
+            unassigned: [],
+            myAssigned: [],
+            viewerIsHumanAgent: false,
+          };
+        }
+        const lists = await conversationService.listHandoffConversationsForHuman(
           ctx.user.tenantId,
           ctx.user.id,
           input?.projectId
         );
+        return { ...lists, viewerIsHumanAgent: true };
       });
     }),
 

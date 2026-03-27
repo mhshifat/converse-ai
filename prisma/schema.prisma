@@ -74,6 +74,7 @@ model project {
   name                      String
   description               String?
   icon                      String?  // Lucide icon name e.g. FolderKanban
+  logo_url                  String?  // custom image URL (overrides icon in UI when set)
   data_schema               Json?    // JSON schema for extracting structured data from conversations
   delivery_integration_ids  Json?    // array of integration ids for email/discord/sms delivery
   knowledge_base_url       String?  // optional URL to fetch external knowledge (GET JSON array of { content } or text)

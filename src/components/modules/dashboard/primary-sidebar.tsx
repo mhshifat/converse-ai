@@ -82,7 +82,11 @@ export function PrimarySidebar() {
                           aria-hidden
                         />
                       )}
-                      <ProjectIcon iconKey={project.icon ?? undefined} size={20} />
+                      <ProjectIcon
+                        iconKey={project.icon ?? undefined}
+                        logoUrl={project.logoUrl ?? undefined}
+                        size={20}
+                      />
                     </Link>
                   </TooltipTrigger>
                   <TooltipContent side="right" className="text-xs">

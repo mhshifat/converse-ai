@@ -29,6 +29,7 @@ export default async function ProjectDetailPage({
           name: project.name,
           description: project.description ?? undefined,
           icon: project.icon ?? undefined,
+          logoUrl: project.logo_url ?? undefined,
           dataSchema: project.data_schema,
           deliveryIntegrationIds: Array.isArray(project.delivery_integration_ids)
             ? (project.delivery_integration_ids as string[])

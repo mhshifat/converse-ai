@@ -266,7 +266,11 @@ export function DashboardShell({ userEmail, children }: DashboardShellProps) {
                     className="flex w-full items-center gap-2.5 rounded-xl border border-border/50 bg-muted/30 px-3 py-2.5 text-left transition-colors hover:bg-muted/50 group/header outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                   >
                     <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-background shadow-sm">
-                      <ProjectIcon iconKey={currentProject?.icon ?? undefined} size={20} />
+                      <ProjectIcon
+                        iconKey={currentProject?.icon ?? undefined}
+                        logoUrl={currentProject?.logoUrl ?? undefined}
+                        size={20}
+                      />
                     </span>
                     <div className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-semibold tracking-tight text-foreground">

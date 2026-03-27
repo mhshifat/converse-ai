@@ -8,6 +8,7 @@ import { ArrowLeft, Calendar, MessageSquare, Bot, Plug, Sparkles } from 'lucide-
 import { ProjectChatbotTab } from './project-chatbot-tab';
 import { ProjectSettingsTab } from './project-settings-tab';
 import { cn } from '@/lib/utils';
+import { ProjectIcon } from '@/lib/project-icons';
 
 interface ChatbotConfig {
   id: string;
@@ -26,6 +27,7 @@ interface ProjectDetailProps {
     name: string;
     description?: string;
     icon?: string | null;
+    logoUrl?: string | null;
     dataSchema?: unknown;
     deliveryIntegrationIds?: string[];
     conversationMode?: 'human_only' | 'ai_only' | 'both';
@@ -273,7 +275,15 @@ export function ProjectDetail({ project }: ProjectDetailProps) {
           Back to projects
         </Button>
       </Link>
-      <h1 className="text-2xl font-bold mb-2">{project.name}</h1>
+      <div className="flex items-center gap-3 mb-2">
+        <ProjectIcon
+          iconKey={project.icon ?? undefined}
+          logoUrl={project.logoUrl ?? undefined}
+          size={36}
+          className="size-9"
+        />
+        <h1 className="text-2xl font-bold">{project.name}</h1>
+      </div>
       {project.description && (
         <p className="text-muted-foreground mb-6">{project.description}</p>
       )}

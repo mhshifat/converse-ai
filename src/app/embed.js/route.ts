@@ -302,7 +302,12 @@ const EMBED_SCRIPT = `
       trpcQuery('widget.getMessages', { conversationId: conversationId }).then(function(res) {
         var u = trpcUnwrap(res);
         var data = u.data;
-        if (!data || !data.messages) return;
+        if (!data) return;
+        if (data.status && data.status !== 'active') {
+          applyServerClosedConversation(conversationId);
+          return;
+        }
+        if (!data.messages) return;
         handoffMode = data.handoffRequested || !!data.assignedHumanAgentId;
         assignedHumanAgentId = data.assignedHumanAgentId || null;
         updateHandoffStatus();
@@ -1614,6 +1619,10 @@ const EMBED_SCRIPT = `
       trpcQuery('widget.getMessages', { conversationId: conversationId }).then(function(res) {
         var u = trpcUnwrap(res);
         var data = u.data;
+        if (data && data.status && data.status !== 'active') {
+          applyServerClosedConversation(conversationId);
+          return;
+        }
         if (data && (data.handoffRequested || data.assignedHumanAgentId)) {
           handoffMode = true;
           assignedHumanAgentId = data.assignedHumanAgentId || null;
@@ -1623,6 +1632,52 @@ const EMBED_SCRIPT = `
         if (!conversationEnded) startHandoffWebRtcIfNeeded();
       });
     }
+  }
+
+  /** Agent closed chat in Live chat (or conversation ended server-side): match widget UI to server. */
+  function applyServerClosedConversation(endedCid) {
+    hideReplyPendingIndicator();
+    stopHandoffPolling();
+    stopVoiceAgentOutput();
+    tearDownHandoffWebRtc();
+    if (voiceSilenceIntervalId) {
+      clearInterval(voiceSilenceIntervalId);
+      voiceSilenceIntervalId = null;
+    }
+    if (voiceRecorder && voiceRecorder.state !== 'inactive') {
+      try { voiceRecorder.stop(); } catch (e) {}
+    }
+    voiceRecorder = null;
+    if (voiceStream) {
+      voiceStream.getTracks().forEach(function (t) { t.stop(); });
+      voiceStream = null;
+    }
+    if (voiceAudioCtx) {
+      try { voiceAudioCtx.close(); } catch (e2) {}
+      voiceAudioCtx = null;
+    }
+    voiceAnalyser = null;
+    voiceChunks = [];
+    voiceIsRecording = false;
+    voiceHasSpeech = false;
+    voiceSilenceStart = null;
+    voiceDiscardChunks = false;
+    var fv = config.footer || {};
+    if (voiceBtnEl) {
+      voiceBtnEl.style.background = fv.sendButtonBackground || config.primaryColor;
+      voiceBtnEl.style.boxShadow = '0 2px 12px ' + (fv.sendButtonBackground || config.primaryColor) + '50';
+      voiceBtnEl.setAttribute('aria-label', 'Start voice call');
+    }
+    if (typeof refreshVoiceFooterLabel === 'function') refreshVoiceFooterLabel();
+    handoffMode = false;
+    assignedHumanAgentId = null;
+    updateHandoffStatus();
+    voiceSendPending = false;
+    endedConversationId = endedCid;
+    conversationId = null;
+    conversationEnded = true;
+    ratingSubmitted = false;
+    showConversationEnded();
   }
 
   function showConversationEnded() {

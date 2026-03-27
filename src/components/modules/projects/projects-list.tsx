@@ -122,7 +122,12 @@ export function ProjectsList() {
                       'bg-primary/10 text-primary transition-colors group-hover:bg-primary/15'
                     )}
                   >
-                    <ProjectIcon iconKey={p.icon ?? undefined} className="size-6" size={24} />
+                    <ProjectIcon
+                      iconKey={p.icon ?? undefined}
+                      logoUrl={p.logoUrl ?? undefined}
+                      className="size-6"
+                      size={24}
+                    />
                   </div>
                   <span
                     className={cn(

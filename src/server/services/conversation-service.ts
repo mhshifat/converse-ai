@@ -1,7 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { AgentProviderFactory } from '@/adapters/agent-provider-factory';
 import { getDefaultAgentForProject } from '../repositories/project-agent-repository';
-import { getAvailableForHandoff } from '../repositories/human-agent-repository';
 import { buildContextForProject } from './agent-context-service';
 import { getEmailSender } from '@/server/delivery/email-sender';
 import { getSmsSender } from '@/server/delivery/sms-sender';
@@ -894,10 +893,12 @@ export async function getConversationMessagesForWidget(conversationId: string) {
     },
   });
   if (!conversation) return null;
+  const active = conversation.status === 'active';
   return {
     status: conversation.status,
-    handoffRequested: !!conversation.handoff_requested_at,
-    assignedHumanAgentId: conversation.assigned_human_agent_id,
+    // Closed conversations still store handoff columns; widget must not show "connected to agent".
+    handoffRequested: active ? !!conversation.handoff_requested_at : false,
+    assignedHumanAgentId: active ? conversation.assigned_human_agent_id : null,
     messages: conversation.messages.map((m) => ({
       senderType: m.sender_type,
       content: m.content,
@@ -914,8 +915,6 @@ export async function requestHumanHandoff(conversationId: string): Promise<boole
       id: true,
       status: true,
       handoff_requested_at: true,
-      skill_tags: true,
-      chatbot: { select: { project: { select: { tenant_id: true } } } },
     },
   });
   if (!conversation || conversation.status !== 'active') return false;
@@ -924,14 +923,8 @@ export async function requestHumanHandoff(conversationId: string): Promise<boole
     where: { id: conversationId },
     data: { handoff_requested_at: new Date() },
   });
-  const tenantId = conversation.chatbot.project.tenant_id;
-  const skillTags = Array.isArray(conversation.skill_tags)
-    ? (conversation.skill_tags as string[])
-    : null;
-  const available = await getAvailableForHandoff(tenantId, skillTags);
-  if (available.length > 0) {
-    await assignConversationToHuman(conversationId, available[0]!.userId, tenantId);
-  }
+  // Do not auto-assign here: an available agent would "take" the chat invisibly, so Live chat
+  // showed no waiting rows and other agents saw nothing. Agents pick conversations via Take.
   return true;
 }
 
