@@ -3,6 +3,7 @@ import { router, publicProcedure } from '@/server/trpc';
 import { withCorrelationError, throwNotFoundWithId } from '@/server/trpc-error';
 import * as conversationService from '../services/conversation-service';
 import * as groqVoice from '../services/groq-voice-service';
+import { WIDGET_CHAT_UNAVAILABLE } from '../widget-customer-messages';
 
 export const widgetRouter = router({
   getConfig: publicProcedure
@@ -10,7 +11,7 @@ export const widgetRouter = router({
     .query(async ({ input }) => {
       return withCorrelationError('widget.getConfig', async (correlationId) => {
         const chatbot = await conversationService.getChatbotByApiKey(input.apiKey);
-        if (!chatbot) throwNotFoundWithId(correlationId, 'Invalid API key');
+        if (!chatbot) throwNotFoundWithId(correlationId, WIDGET_CHAT_UNAVAILABLE);
         const project = chatbot.project as {
           default_rating_type?: string;
           proactive_delay_seconds?: number | null;
@@ -40,13 +41,13 @@ export const widgetRouter = router({
     .mutation(async ({ input }) => {
       return withCorrelationError('widget.startConversation', async (correlationId) => {
         const chatbot = await conversationService.getChatbotByApiKey(input.apiKey);
-        if (!chatbot) throwNotFoundWithId(correlationId, 'Invalid API key');
+        if (!chatbot) throwNotFoundWithId(correlationId, WIDGET_CHAT_UNAVAILABLE);
         const result = await conversationService.startConversation(
           chatbot.id,
           input.customerId,
           input.channel
         );
-        if (!result) throwNotFoundWithId(correlationId, 'No agent available');
+        if (!result) throwNotFoundWithId(correlationId, WIDGET_CHAT_UNAVAILABLE);
         if ('unavailable' in result) return result;
         return result;
       });
@@ -71,7 +72,7 @@ export const widgetRouter = router({
           input.content,
           input.attachmentUrl
         );
-        if (!result) throwNotFoundWithId(correlationId, 'Invalid API key or no agent available');
+        if (!result) throwNotFoundWithId(correlationId, WIDGET_CHAT_UNAVAILABLE);
         if ('unavailable' in result) return result;
         return result;
       });
@@ -138,7 +139,7 @@ export const widgetRouter = router({
     .mutation(async ({ input }) => {
       return withCorrelationError('widget.reportEmbedBeacon', async (correlationId) => {
         const result = await conversationService.recordEmbedBeacon(input.apiKey, input.pageUrl);
-        if (!result.ok) throwNotFoundWithId(correlationId, 'Invalid API key');
+        if (!result.ok) throwNotFoundWithId(correlationId, WIDGET_CHAT_UNAVAILABLE);
         return { success: true };
       });
     }),
@@ -174,7 +175,7 @@ export const widgetRouter = router({
     .mutation(async ({ input }) => {
       return withCorrelationError('widget.transcribeVoice', async (correlationId) => {
         const chatbot = await conversationService.getChatbotByApiKey(input.apiKey);
-        if (!chatbot) throwNotFoundWithId(correlationId, 'Invalid API key');
+        if (!chatbot) throwNotFoundWithId(correlationId, WIDGET_CHAT_UNAVAILABLE);
         const buffer = Buffer.from(input.audioBase64, 'base64');
         const text = await groqVoice.transcribeAudio(buffer, {
           contentType: input.contentType ?? 'audio/webm',
@@ -193,7 +194,7 @@ export const widgetRouter = router({
     .mutation(async ({ input }) => {
       return withCorrelationError('widget.synthesizeSpeech', async (correlationId) => {
         const chatbot = await conversationService.getChatbotByApiKey(input.apiKey);
-        if (!chatbot) throwNotFoundWithId(correlationId, 'Invalid API key');
+        if (!chatbot) throwNotFoundWithId(correlationId, WIDGET_CHAT_UNAVAILABLE);
         const buffer = await groqVoice.synthesizeSpeech(input.text);
         return { audioBase64: buffer.toString('base64') };
       });

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getChatbotByApiKey } from '@/server/services/conversation-service';
 import { getUploadService } from '@/server/upload/upload-service';
+import { WIDGET_CHAT_UNAVAILABLE } from '@/server/widget-customer-messages';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 const ALLOWED_TYPES = [
@@ -22,7 +23,7 @@ export async function POST(request: Request) {
   }
   const chatbot = await getChatbotByApiKey(apiKey.trim());
   if (!chatbot) {
-    return NextResponse.json({ error: 'Invalid API key' }, { status: 401 });
+    return NextResponse.json({ error: WIDGET_CHAT_UNAVAILABLE }, { status: 401 });
   }
 
   if (!file || file.size === 0) {

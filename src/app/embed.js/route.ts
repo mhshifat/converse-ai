@@ -243,6 +243,7 @@ const EMBED_SCRIPT = `
   var root = null;
   var panel = null;
   var listEl = null;
+  var caiReplyPendingEl = null;
   var handoffMode = false;
   var assignedHumanAgentId = null;
   var handoffStatusEl = null;
@@ -875,7 +876,7 @@ const EMBED_SCRIPT = `
     if (document.getElementById('converseai-widget-styles')) return;
     var style = document.createElement('style');
     style.id = 'converseai-widget-styles';
-    style.textContent = '#converseai-root .cai-msg-user{animation: cai-in-u .3s ease-out both}#converseai-root .cai-msg-agent{animation: cai-in-a .3s ease-out both}@keyframes cai-in-u{from{opacity:0;transform:translateX(8px) scale(.96)}to{opacity:1;transform:translateX(0) scale(1)}}@keyframes cai-in-a{from{opacity:0;transform:translateX(-8px) scale(.96)}to{opacity:1;transform:translateX(0) scale(1)}}@keyframes cai-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.7;transform:scale(1.2)}}@keyframes cai-welcome-in{from{opacity:0;transform:translateY(12px) scale(0.96)}to{opacity:1;transform:translateY(0) scale(1)}}';
+    style.textContent = '#converseai-root .cai-msg-user{animation: cai-in-u .3s ease-out both}#converseai-root .cai-msg-agent{animation: cai-in-a .3s ease-out both}@keyframes cai-in-u{from{opacity:0;transform:translateX(8px) scale(.96)}to{opacity:1;transform:translateX(0) scale(1)}}@keyframes cai-in-a{from{opacity:0;transform:translateX(-8px) scale(.96)}to{opacity:1;transform:translateX(0) scale(1)}}@keyframes cai-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.7;transform:scale(1.2)}}@keyframes cai-welcome-in{from{opacity:0;transform:translateY(12px) scale(0.96)}to{opacity:1;transform:translateY(0) scale(1)}}#converseai-root .cai-reply-pending-dots{display:flex;align-items:center;gap:4px}#converseai-root .cai-reply-pending-dots span{width:6px;height:6px;border-radius:50%;background:currentColor;opacity:0.35;animation:cai-dot-b 1.2s ease-in-out infinite}#converseai-root .cai-reply-pending-dots span:nth-child(2){animation-delay:0.15s}#converseai-root .cai-reply-pending-dots span:nth-child(3){animation-delay:0.3s}@keyframes cai-dot-b{0%,80%,100%{transform:translateY(0);opacity:0.35}40%{transform:translateY(-4px);opacity:1}}';
     document.head.appendChild(style);
   }
 
@@ -1109,11 +1110,13 @@ const EMBED_SCRIPT = `
         voiceSendPending = true;
         if (typeof refreshVoiceFooterLabel === 'function') refreshVoiceFooterLabel();
       }
+      showReplyPendingIndicator();
       if (conversationId) {
         var cidSend = conversationId;
         trpcMutate('widget.sendMessage', { conversationId: conversationId, content: text, attachmentUrl: attachmentUrl || undefined }).then(function (res) {
           voiceSendPending = false;
           if (voiceEnabled && mode === 'voice' && typeof refreshVoiceFooterLabel === 'function') refreshVoiceFooterLabel();
+          hideReplyPendingIndicator();
           var u = trpcUnwrap(res);
           if (u.error) {
             appendMsg('agent', u.error);
@@ -1127,6 +1130,7 @@ const EMBED_SCRIPT = `
         }).catch(function () {
           voiceSendPending = false;
           if (voiceEnabled && mode === 'voice' && typeof refreshVoiceFooterLabel === 'function') refreshVoiceFooterLabel();
+          hideReplyPendingIndicator();
           appendMsg('agent', 'Could not reach the chat service. Check your connection and try again.');
         });
       } else {
@@ -1139,6 +1143,7 @@ const EMBED_SCRIPT = `
         }).then(function (res) {
           voiceSendPending = false;
           if (voiceEnabled && mode === 'voice' && typeof refreshVoiceFooterLabel === 'function') refreshVoiceFooterLabel();
+          hideReplyPendingIndicator();
           var u = trpcUnwrap(res);
           if (u.error) {
             appendMsg('agent', u.error);
@@ -1164,6 +1169,7 @@ const EMBED_SCRIPT = `
         }).catch(function () {
           voiceSendPending = false;
           if (voiceEnabled && mode === 'voice' && typeof refreshVoiceFooterLabel === 'function') refreshVoiceFooterLabel();
+          hideReplyPendingIndicator();
           appendMsg('agent', 'Could not reach the chat service. Check your connection and try again.');
         });
       }
@@ -1743,9 +1749,71 @@ const EMBED_SCRIPT = `
     listEl.scrollTop = listEl.scrollHeight;
   }
 
+  function hideReplyPendingIndicator() {
+    if (caiReplyPendingEl) {
+      if (caiReplyPendingEl.parentNode) caiReplyPendingEl.parentNode.removeChild(caiReplyPendingEl);
+      caiReplyPendingEl = null;
+    }
+  }
+
+  function showReplyPendingIndicator() {
+    hideReplyPendingIndicator();
+    if (!listEl) return;
+    var m = config.messages || {};
+    var agentBg = m.agentBubbleBackground || '#f0f0f0';
+    var agentFg = m.agentBubbleTextColor || '#111';
+    var row = document.createElement('div');
+    row.className = 'cai-msg-agent';
+    row.setAttribute('data-cai-reply-pending', '1');
+    row.setAttribute('aria-live', 'polite');
+    row.style.cssText = 'display:flex;align-items:flex-end;gap:8px;flex-direction:row;align-self:flex-start;';
+    var avatar = document.createElement('div');
+    avatar.style.cssText =
+      'width:28px;height:28px;flex-shrink:0;border-radius:50%;display:flex;align-items:center;justify-content:center;background:' +
+      agentBg +
+      ';color:' +
+      agentFg +
+      ';border:2px solid ' +
+      agentBg +
+      ';box-sizing:border-box;';
+    avatar.setAttribute('aria-hidden', 'true');
+    avatar.appendChild(caiSvg(CAI.bot, 14));
+    var bubble = document.createElement('div');
+    bubble.style.cssText =
+      'max-width:85%;padding:10px 14px;border-radius:' +
+      (m.bubbleBorderRadius || 12) +
+      'px;font-size:' +
+      (m.fontSize || 14) +
+      'px;background:' +
+      agentBg +
+      ';color:' +
+      agentFg +
+      ';box-shadow:0 1px 3px rgba(0,0,0,.08);display:flex;flex-direction:column;gap:6px;';
+    var label = document.createElement('span');
+    label.style.cssText = 'font-size:12px;opacity:0.85;line-height:1.2;';
+    label.textContent = 'Agent is typing…';
+    var dotsWrap = document.createElement('div');
+    dotsWrap.className = 'cai-reply-pending-dots';
+    dotsWrap.style.color = agentFg;
+    dotsWrap.appendChild(document.createElement('span'));
+    dotsWrap.appendChild(document.createElement('span'));
+    dotsWrap.appendChild(document.createElement('span'));
+    bubble.appendChild(label);
+    bubble.appendChild(dotsWrap);
+    row.appendChild(avatar);
+    row.appendChild(bubble);
+    if (endedFlowEl && endedFlowEl.parentNode === listEl) listEl.insertBefore(row, endedFlowEl);
+    else listEl.appendChild(row);
+    caiReplyPendingEl = row;
+    listEl.scrollTop = listEl.scrollHeight;
+  }
+
   function appendMsg(sender, content, noPush) {
     if (!noPush) messages.push({ sender: sender, content: content });
-    if (listEl && listEl.querySelector && listEl.childNodes.length === 1 && listEl.querySelector('div') && !listEl.querySelector('div').dataset.msg) listEl.innerHTML = '';
+    if (listEl && listEl.querySelector && listEl.childNodes.length === 1 && listEl.querySelector('div') && !listEl.querySelector('div').dataset.msg) {
+      listEl.innerHTML = '';
+      hideReplyPendingIndicator();
+    }
     if (!listEl) return;
     var m = config.messages || {};
     var isUser = sender === 'customer';
