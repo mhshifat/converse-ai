@@ -5,7 +5,14 @@ const EMBED_SCRIPT = `
   var script = document.currentScript;
   var apiKey = script && (script.getAttribute('data-api-key') || script.dataset.apiKey);
   if (!apiKey) return;
-  var baseUrl = (script && (script.getAttribute('data-base-url') || script.dataset.baseUrl)) || (script.src ? script.src.replace(/\\/embed\\.js.*$/, '') : '');
+  var baseUrl =
+    (script && (script.getAttribute('data-base-url') || script.dataset.baseUrl)) ||
+    (script && script.src
+      ? (function (u) {
+          var ix = u.indexOf('/embed.js');
+          return ix >= 0 ? u.slice(0, ix) : window.location.origin;
+        })(script.src)
+      : '');
   if (!baseUrl) baseUrl = window.location.origin;
   var containerId = script && (script.getAttribute('data-container-id') || script.dataset.containerId);
   var openPanelOnLoad = script && (script.getAttribute('data-open-panel') === 'true' || script.dataset.openPanel === 'true');
@@ -648,10 +655,57 @@ const EMBED_SCRIPT = `
   }
 
   function caiEscapeRegexPathChars(s) {
-    return String(s).replace(/[\\^$+?.()|[\\]{}]/g, '\\$&');
+    var t = String(s);
+    var out = '';
+    var escCodes = [92, 94, 36, 42, 43, 63, 46, 40, 41, 124, 91, 93, 123, 125];
+    for (var ei = 0; ei < t.length; ei++) {
+      var ch = t.charAt(ei);
+      var cc = t.charCodeAt(ei);
+      var needsEsc = false;
+      for (var ek = 0; ek < escCodes.length; ek++) {
+        if (escCodes[ek] === cc) {
+          needsEsc = true;
+          break;
+        }
+      }
+      if (needsEsc) out += '\\\\' + ch;
+      else out += ch;
+    }
+    return out;
   }
   function caiExpandEmbedPathDynamicSegments(str) {
-    return String(str).replace(/\/:[A-Za-z][A-Za-z0-9_]*(?=\/|$)/g, '/*');
+    var t = String(str);
+    var out = '';
+    var ei2 = 0;
+    while (ei2 < t.length) {
+      if (
+        t.charAt(ei2) === '/' &&
+        ei2 + 2 < t.length &&
+        t.charAt(ei2 + 1) === ':' &&
+        (t.charCodeAt(ei2 + 2) >= 65 && t.charCodeAt(ei2 + 2) <= 90 || t.charCodeAt(ei2 + 2) >= 97 && t.charCodeAt(ei2 + 2) <= 122)
+      ) {
+        var ej = ei2 + 2;
+        while (ej < t.length) {
+          var cj = t.charCodeAt(ej);
+          if (
+            (cj >= 65 && cj <= 90) ||
+            (cj >= 97 && cj <= 122) ||
+            (cj >= 48 && cj <= 57) ||
+            t.charAt(ej) === '_'
+          ) {
+            ej++;
+          } else break;
+        }
+        if (ej >= t.length || t.charAt(ej) === '/') {
+          out += '/*';
+          ei2 = ej;
+          continue;
+        }
+      }
+      out += t.charAt(ei2);
+      ei2++;
+    }
+    return out;
   }
   function caiPathMatchesEmbedHiddenPattern(pathname, pattern) {
     var path = pathname || '/';
