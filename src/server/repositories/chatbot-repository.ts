@@ -26,6 +26,8 @@ export async function getChatbotByProjectId(projectId: string, tenantId: string)
     apiKey: chatbot.api_key ?? undefined,
     createdAt: chatbot.created_at,
     updatedAt: chatbot.updated_at,
+    lastEmbedBeaconAt: chatbot.last_embed_beacon_at?.toISOString() ?? null,
+    lastEmbedOrigin: chatbot.last_embed_origin ?? null,
   };
 }
 
@@ -83,6 +85,8 @@ export async function updateChatbotConfig(
     apiKey: updated.api_key ?? undefined,
     createdAt: updated.created_at,
     updatedAt: updated.updated_at,
+    lastEmbedBeaconAt: updated.last_embed_beacon_at?.toISOString() ?? null,
+    lastEmbedOrigin: updated.last_embed_origin ?? null,
   };
 }
 

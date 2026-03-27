@@ -12,7 +12,7 @@ import {
   UserRound,
   X,
 } from 'lucide-react';
-import type { ChatbotWidgetConfig } from '@/lib/chatbot-widget-config';
+import { clampWidgetPositionOffsetPx, type ChatbotWidgetConfig } from '@/lib/chatbot-widget-config';
 import { ConverseLogo } from '@/components/shared/converse-logo';
 import { cn } from '@/lib/utils';
 
@@ -27,7 +27,9 @@ export const ChatbotPreview = React.memo(function ChatbotPreview({ config, class
   const [mode, setMode] = useState<'chat' | 'voice'>('chat');
   const [welcomeDismissed, setWelcomeDismissed] = useState(false);
   const { bubble, popup, header, footer, messages } = config;
-  const showProactiveWelcome = (config.proactiveWelcomeEnabled ?? false) && !welcomeDismissed;
+  /** Match embed: welcome card only when the chat panel is closed (preview defaults to open for editing). */
+  const showProactiveWelcome =
+    (config.proactiveWelcomeEnabled ?? false) && !welcomeDismissed && !open;
   const logoSize = header.logoSize ?? 28;
   const primary = config.primaryColor ?? '#2563eb';
   // Use primary when section value is unset or empty so primary color change always reflects
@@ -41,12 +43,19 @@ export const ChatbotPreview = React.memo(function ChatbotPreview({ config, class
     'top-right': 'items-start justify-end',
     'top-left': 'items-start justify-start',
   };
-  const widgetPosition = {
-    'bottom-right': 'bottom-4 right-4',
-    'bottom-left': 'bottom-4 left-4',
-    'top-right': 'top-4 right-4',
-    'top-left': 'top-4 left-4',
-  };
+  const it = clampWidgetPositionOffsetPx(Number(config.widgetInsetTopPx ?? 0));
+  const ir = clampWidgetPositionOffsetPx(Number(config.widgetInsetRightPx ?? 0));
+  const ib = clampWidgetPositionOffsetPx(Number(config.widgetInsetBottomPx ?? 0));
+  const il = clampWidgetPositionOffsetPx(Number(config.widgetInsetLeftPx ?? 0));
+  const edge = 16;
+  const widgetAnchorStyle =
+    config.position === 'bottom-right'
+      ? { bottom: edge + ib, right: edge + ir }
+      : config.position === 'bottom-left'
+        ? { bottom: edge + ib, left: edge + il }
+        : config.position === 'top-right'
+          ? { top: edge + it, right: edge + ir }
+          : { top: edge + it, left: edge + il };
 
   return (
     <div
@@ -55,7 +64,7 @@ export const ChatbotPreview = React.memo(function ChatbotPreview({ config, class
     >
       <p className="absolute left-3 top-3 text-xs font-medium text-muted-foreground">Live preview</p>
       <div className={cn('absolute inset-0 flex p-6', viewportPosition[config.position])}>
-        <div className={cn('absolute', widgetPosition[config.position])}>
+        <div className="absolute" style={widgetAnchorStyle}>
           {/* Proactive welcome card (first visit) - modern, eye-catching */}
           {showProactiveWelcome && (
             <div

@@ -7,6 +7,7 @@ import { trpc } from '@/utils/trpc';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { ImagePlus } from 'lucide-react';
 import {
@@ -18,7 +19,9 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
+  clampWidgetPositionOffsetPx,
   mergeWidgetConfig,
+  parseEmbedHiddenPathsFromTextarea,
   widgetConfigToStorage,
   type ChatbotWidgetConfig,
 } from '@/lib/chatbot-widget-config';
@@ -45,6 +48,9 @@ export function ProjectChatbotTab({ projectId, initialChatbot }: ProjectChatbotT
   const [config, setConfig] = useState<ChatbotWidgetConfig>(() =>
     mergeWidgetConfig(initialChatbot?.config)
   );
+  const [hiddenPathsText, setHiddenPathsText] = useState(() =>
+    (mergeWidgetConfig(initialChatbot?.config).embedHiddenPaths ?? []).join('\n')
+  );
   const [logoUploading, setLogoUploading] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const debouncedConfig = useDebouncedValue(config, PREVIEW_DEBOUNCE_MS);
@@ -59,7 +65,9 @@ export function ProjectChatbotTab({ projectId, initialChatbot }: ProjectChatbotT
     if (!chatbot?.id) return;
     if (syncedServerConfigForChatbotIdRef.current === chatbot.id) return;
     syncedServerConfigForChatbotIdRef.current = chatbot.id;
-    setConfig(mergeWidgetConfig(chatbot.config));
+    const merged = mergeWidgetConfig(chatbot.config);
+    setConfig(merged);
+    setHiddenPathsText((merged.embedHiddenPaths ?? []).join('\n'));
   }, [chatbot]);
 
   const getOrCreate = trpc.chatbot.getOrCreateForProject.useMutation({
@@ -243,6 +251,74 @@ export function ProjectChatbotTab({ projectId, initialChatbot }: ProjectChatbotT
               </SelectContent>
             </Select>
           </Field>
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              Extra inset from each screen edge (px), added to the default margin. Only the pair that matches your
+              corner is used (e.g. bottom-right uses bottom + right); the others stay saved if you switch position.
+            </p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="From top">
+                <Input
+                  type="number"
+                  min={-80}
+                  max={400}
+                  value={config.widgetInsetTopPx ?? 0}
+                  onChange={(e) =>
+                    patch(
+                      'widgetInsetTopPx',
+                      clampWidgetPositionOffsetPx(Number(e.target.value) || 0)
+                    )
+                  }
+                  placeholder="0"
+                />
+              </Field>
+              <Field label="From right">
+                <Input
+                  type="number"
+                  min={-80}
+                  max={400}
+                  value={config.widgetInsetRightPx ?? 0}
+                  onChange={(e) =>
+                    patch(
+                      'widgetInsetRightPx',
+                      clampWidgetPositionOffsetPx(Number(e.target.value) || 0)
+                    )
+                  }
+                  placeholder="0"
+                />
+              </Field>
+              <Field label="From bottom">
+                <Input
+                  type="number"
+                  min={-80}
+                  max={400}
+                  value={config.widgetInsetBottomPx ?? 0}
+                  onChange={(e) =>
+                    patch(
+                      'widgetInsetBottomPx',
+                      clampWidgetPositionOffsetPx(Number(e.target.value) || 0)
+                    )
+                  }
+                  placeholder="0"
+                />
+              </Field>
+              <Field label="From left">
+                <Input
+                  type="number"
+                  min={-80}
+                  max={400}
+                  value={config.widgetInsetLeftPx ?? 0}
+                  onChange={(e) =>
+                    patch(
+                      'widgetInsetLeftPx',
+                      clampWidgetPositionOffsetPx(Number(e.target.value) || 0)
+                    )
+                  }
+                  placeholder="0"
+                />
+              </Field>
+            </div>
+          </div>
           <Field label="Welcome message">
             <Input
               value={config.welcomeMessage}
@@ -264,6 +340,29 @@ export function ProjectChatbotTab({ projectId, initialChatbot }: ProjectChatbotT
             />
             <Label>Allow file attachments (images, PDF, text)</Label>
           </div>
+          <Field label="Hide widget on these paths">
+            <Textarea
+              rows={5}
+              className="font-mono text-sm min-h-[100px]"
+              placeholder={'/checkout\n/cart\n/account/settings'}
+              value={hiddenPathsText}
+              onChange={(e) => {
+                const v = e.target.value;
+                setHiddenPathsText(v);
+                setConfig((prev) => ({
+                  ...prev,
+                  embedHiddenPaths: parseEmbedHiddenPathsFromTextarea(v),
+                }));
+              }}
+            />
+            <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+              One path per line. The live site compares your visitor&apos;s URL path (e.g.{' '}
+              <code className="text-[11px]">/checkout/review</code>) to each entry: a line{' '}
+              <code className="text-[11px]">/checkout</code> hides that page and anything under it. Leading{' '}
+              <code className="text-[11px]">/</code> is added if omitted. On single-page apps, the snippet usually
+              runs once per full page load unless you reload the embed on route changes.
+            </p>
+          </Field>
           <div className="flex items-center gap-2">
             <Switch
               checked={config.proactiveWelcomeEnabled ?? false}

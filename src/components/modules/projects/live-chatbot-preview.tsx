@@ -16,7 +16,7 @@ import {
   Phone,
   PhoneOff,
 } from 'lucide-react';
-import type { ChatbotWidgetConfig } from '@/lib/chatbot-widget-config';
+import { clampWidgetPositionOffsetPx, type ChatbotWidgetConfig } from '@/lib/chatbot-widget-config';
 import { ConverseLogo } from '@/components/shared/converse-logo';
 import { cn } from '@/lib/utils';
 import { trpc } from '@/utils/trpc';
@@ -112,6 +112,7 @@ export function LiveChatbotPreview({
   const [ratingSubmitted, setRatingSubmitted] = useState(false);
   const [showInactivityWarning, setShowInactivityWarning] = useState(false);
   const [handoffRequested, setHandoffRequested] = useState(false);
+  const handoffRequestedRef = useRef(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isPlayingAgentAudio, setIsPlayingAgentAudio] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
@@ -142,6 +143,8 @@ export function LiveChatbotPreview({
   const voiceSignalingWsRef = useRef<WebSocket | null>(null);
   const voicePeerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const voiceRemoteAudioRef = useRef<HTMLAudioElement | null>(null);
+  /** Mic opened only for WebRTC handoff (not shared with MediaRecorder); stopped on teardown. */
+  const voiceHandoffLocalStreamRef = useRef<MediaStream | null>(null);
   const [liveVoiceConnected, setLiveVoiceConnected] = useState(false);
   const liveVoiceConnectedRef = useRef(false);
   const endedRef = useRef(false);
@@ -153,6 +156,7 @@ export function LiveChatbotPreview({
   isPlayingAgentAudioRef.current = isPlayingAgentAudio;
   endedRef.current = ended;
   liveVoiceConnectedRef.current = liveVoiceConnected;
+  handoffRequestedRef.current = handoffRequested;
 
   const { bubble, popup, header, footer, messages: msgCfg } = config;
   const logoSize = header.logoSize ?? 28;
@@ -436,6 +440,19 @@ export function LiveChatbotPreview({
             }
           };
           await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+          const recStream = streamRef.current;
+          let micStream: MediaStream;
+          if (
+            isRecordingRef.current &&
+            recStream?.getAudioTracks().some((t) => t.readyState === 'live')
+          ) {
+            micStream = recStream;
+            voiceHandoffLocalStreamRef.current = null;
+          } else {
+            micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            voiceHandoffLocalStreamRef.current = micStream;
+          }
+          micStream.getAudioTracks().forEach((track) => pc.addTrack(track, micStream));
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
           ws.send(JSON.stringify({ type: 'answer', sdp: pc.localDescription }));
@@ -457,6 +474,8 @@ export function LiveChatbotPreview({
       setLiveVoiceConnected(false);
       voicePeerConnectionRef.current?.close();
       voicePeerConnectionRef.current = null;
+      voiceHandoffLocalStreamRef.current?.getTracks().forEach((t) => t.stop());
+      voiceHandoffLocalStreamRef.current = null;
       voiceRemoteAudioRef.current?.remove();
       voiceRemoteAudioRef.current = null;
     };
@@ -466,6 +485,8 @@ export function LiveChatbotPreview({
       voiceSignalingWsRef.current = null;
       voicePeerConnectionRef.current?.close();
       voicePeerConnectionRef.current = null;
+      voiceHandoffLocalStreamRef.current?.getTracks().forEach((t) => t.stop());
+      voiceHandoffLocalStreamRef.current = null;
       voiceRemoteAudioRef.current?.remove();
       voiceRemoteAudioRef.current = null;
       setLiveVoiceConnected(false);
@@ -627,6 +648,7 @@ export function LiveChatbotPreview({
   const processRecordedAudio = useCallback(
     async (blob: Blob) => {
       if (!apiKey || endedRef.current) return;
+      if (handoffRequestedRef.current && liveVoiceConnectedRef.current) return;
       try {
         let payloadBlob: Blob;
         let contentType: string;
@@ -868,12 +890,19 @@ export function LiveChatbotPreview({
     'top-right': 'items-start justify-end',
     'top-left': 'items-start justify-start',
   };
-  const widgetPosition = {
-    'bottom-right': 'bottom-4 right-4',
-    'bottom-left': 'bottom-4 left-4',
-    'top-right': 'top-4 right-4',
-    'top-left': 'top-4 left-4',
-  };
+  const it = clampWidgetPositionOffsetPx(Number(config.widgetInsetTopPx ?? 0));
+  const ir = clampWidgetPositionOffsetPx(Number(config.widgetInsetRightPx ?? 0));
+  const ib = clampWidgetPositionOffsetPx(Number(config.widgetInsetBottomPx ?? 0));
+  const il = clampWidgetPositionOffsetPx(Number(config.widgetInsetLeftPx ?? 0));
+  const edge = 16;
+  const widgetAnchorStyle =
+    config.position === 'bottom-right'
+      ? { bottom: edge + ib, right: edge + ir }
+      : config.position === 'bottom-left'
+        ? { bottom: edge + ib, left: edge + il }
+        : config.position === 'top-right'
+          ? { top: edge + it, right: edge + ir }
+          : { top: edge + it, left: edge + il };
 
   return (
     <div
@@ -884,7 +913,7 @@ export function LiveChatbotPreview({
         Live preview — test as your customer
       </p>
       <div className={cn('absolute inset-0 flex p-6', viewportPosition[config.position])}>
-        <div className={cn('absolute', widgetPosition[config.position])}>
+        <div className="absolute" style={widgetAnchorStyle}>
           {/* Bubble */}
           <button
             type="button"

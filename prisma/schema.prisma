@@ -130,6 +130,10 @@ model chatbot {
   name         String
   config       Json     // UI: colors, position, welcome_message, voice_enabled
   api_key      String?  @unique // for widget embed authentication
+  /// Last time the embed script reported a load from a visitor page (throttled server-side).
+  last_embed_beacon_at DateTime?
+  /// Origin (scheme + host) of that page; no path stored for privacy.
+  last_embed_origin    String?  @db.VarChar(512)
   created_at   DateTime @default(now())
   updated_at   DateTime @updatedAt
   project      project  @relation(fields: [project_id], references: [id])

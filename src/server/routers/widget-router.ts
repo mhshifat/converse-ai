@@ -128,6 +128,21 @@ export const widgetRouter = router({
       });
     }),
 
+  reportEmbedBeacon: publicProcedure
+    .input(
+      z.object({
+        apiKey: z.string().min(1),
+        pageUrl: z.string().url().max(2048),
+      })
+    )
+    .mutation(async ({ input }) => {
+      return withCorrelationError('widget.reportEmbedBeacon', async (correlationId) => {
+        const result = await conversationService.recordEmbedBeacon(input.apiKey, input.pageUrl);
+        if (!result.ok) throwNotFoundWithId(correlationId, 'Invalid API key');
+        return { success: true };
+      });
+    }),
+
   submitRating: publicProcedure
     .input(
       z.object({

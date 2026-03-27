@@ -46,6 +46,7 @@ export function LiveChatContent({ projectId }: LiveChatContentProps = {}) {
   const voiceSignalingWsRef = useRef<WebSocket | null>(null);
   const voicePeerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const voiceLocalStreamRef = useRef<MediaStream | null>(null);
+  const voiceRemoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const signalingUrl =
     typeof process !== 'undefined' ? (process.env.NEXT_PUBLIC_VOICE_SIGNALING_WS_URL as string | undefined) : undefined;
 
@@ -143,6 +144,13 @@ export function LiveChatContent({ projectId }: LiveChatContentProps = {}) {
     voicePeerConnectionRef.current = null;
     voiceLocalStreamRef.current?.getTracks().forEach((t) => t.stop());
     voiceLocalStreamRef.current = null;
+    const remoteEl = voiceRemoteAudioRef.current;
+    if (remoteEl) {
+      remoteEl.pause();
+      remoteEl.srcObject = null;
+      remoteEl.remove();
+      voiceRemoteAudioRef.current = null;
+    }
     setLiveVoiceJoined(false);
   }, []);
 
@@ -174,6 +182,19 @@ export function LiveChatContent({ projectId }: LiveChatContentProps = {}) {
           voiceLocalStreamRef.current = stream;
           const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
           voicePeerConnectionRef.current = pc;
+          pc.ontrack = (e) => {
+            if (!e.streams[0]) return;
+            let el = voiceRemoteAudioRef.current;
+            if (!el) {
+              el = document.createElement('audio');
+              el.autoplay = true;
+              el.setAttribute('playsinline', 'true');
+              el.style.cssText = 'position:absolute;width:0;height:0;opacity:0;pointer-events:none;';
+              document.body.appendChild(el);
+              voiceRemoteAudioRef.current = el;
+            }
+            el.srcObject = e.streams[0];
+          };
           stream.getTracks().forEach((track) => pc.addTrack(track, stream));
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);

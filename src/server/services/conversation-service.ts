@@ -131,6 +131,42 @@ export async function getChatbotByApiKey(apiKey: string) {
   return chatbot;
 }
 
+const EMBED_BEACON_THROTTLE_MS = 60_000;
+
+/** Records that the embed script ran on a page (origin only). Throttled per chatbot to limit writes. */
+export async function recordEmbedBeacon(
+  apiKey: string,
+  pageUrl: string
+): Promise<{ ok: true; recorded: boolean } | { ok: false }> {
+  const chatbot = await getChatbotByApiKey(apiKey);
+  if (!chatbot) return { ok: false };
+
+  let origin: string;
+  try {
+    const u = new URL(pageUrl);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return { ok: true, recorded: false };
+    origin = u.origin;
+  } catch {
+    return { ok: true, recorded: false };
+  }
+  if (origin.length > 512) origin = origin.slice(0, 512);
+
+  const now = Date.now();
+  const last = chatbot.last_embed_beacon_at;
+  if (last && now - last.getTime() < EMBED_BEACON_THROTTLE_MS) {
+    return { ok: true, recorded: false };
+  }
+
+  await prisma.chatbot.update({
+    where: { id: chatbot.id },
+    data: {
+      last_embed_beacon_at: new Date(),
+      last_embed_origin: origin,
+    },
+  });
+  return { ok: true, recorded: true };
+}
+
 export async function assignAgent(tenantId: string): Promise<string | null> {
   const agents = await prisma.agent.findMany({
     where: { tenant_id: tenantId },
