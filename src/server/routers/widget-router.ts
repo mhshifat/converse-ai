@@ -70,7 +70,7 @@ export const widgetRouter = router({
           input.customerId,
           input.channel,
           input.content,
-          input.attachmentUrl
+          { attachmentUrl: input.attachmentUrl }
         );
         if (!result) throwNotFoundWithId(correlationId, WIDGET_CHAT_UNAVAILABLE);
         if ('unavailable' in result) return result;

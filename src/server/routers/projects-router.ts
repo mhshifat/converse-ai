@@ -68,7 +68,7 @@ export const projectsRouter = router({
       z.object({
         id: z.string().uuid(),
         name: z.string().min(1).optional(),
-        description: z.string().optional(),
+        description: z.string().nullable().optional(),
         icon: z.string().optional().nullable(),
         logoUrl: z.string().url().nullable().optional(),
         dataSchema: z.unknown().optional(),

@@ -488,6 +488,25 @@ export function ProjectChatbotTab({ projectId, initialChatbot }: ProjectChatbotT
             />
             <Label>Allow file attachments (images, PDF, text)</Label>
           </div>
+          <Field label="Customer idle timeout (minutes)">
+            <Input
+              type="number"
+              min={0}
+              max={120}
+              className="max-w-[120px]"
+              value={config.inactivityMinutes ?? 3}
+              onChange={(e) => {
+                const n = Math.max(0, Math.min(120, Math.round(Number(e.target.value) || 0)));
+                patch('inactivityMinutes' as keyof ChatbotWidgetConfig, n);
+              }}
+            />
+            <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+              After this many minutes without a message from the visitor, the widget shows a warning; one minute later
+              the chat closes and the rating step appears. Starts after the visitor has sent at least one message. Use{' '}
+              <span className="font-medium text-foreground">0</span> to disable. When enabled, the embed enforces at
+              least 2 minutes.
+            </p>
+          </Field>
           <Field label="Hide widget on these paths">
             <Textarea
               rows={5}

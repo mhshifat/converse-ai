@@ -227,6 +227,8 @@ const EMBED_SCRIPT = `
     embedHiddenSubdomains: [],
     widgetPathInsets: [],
     defaultRatingType: 'thumbs',
+    /** Minutes of no customer messages before warning, then 1 more minute to auto-close. Set 0 to disable. */
+    inactivityMinutes: 3,
     proactiveWelcomeEnabled: false,
     proactiveWelcomeDelaySeconds: 0,
     proactiveWelcomeStatus: '',
@@ -244,6 +246,7 @@ const EMBED_SCRIPT = `
   var panel = null;
   var listEl = null;
   var caiReplyPendingEl = null;
+  var caiHumanTypingEl = null;
   var handoffMode = false;
   var assignedHumanAgentId = null;
   var handoffStatusEl = null;
@@ -251,6 +254,9 @@ const EMBED_SCRIPT = `
   var endedFlowEl = null;
   var endedConversationId = null;
   var ratingSubmitted = false;
+  var inactivityWarningTimerId = null;
+  var inactivityCloseTimerId = null;
+  var inactivityBannerEl = null;
   var pollIntervalId = null;
   var voiceStream = null;
   var voiceRecorder = null;
@@ -320,9 +326,12 @@ const EMBED_SCRIPT = `
             else messages.forEach(function(msg) { appendMsg(msg.sender, msg.content, true); });
           }
         }
+        var showHumanTyping = !!(data.agentTyping && assignedHumanAgentId && !caiReplyPendingEl);
+        if (showHumanTyping) showHumanTypingIndicator();
+        else hideHumanTypingIndicator();
         if (!conversationEnded) startHandoffWebRtcIfNeeded();
       });
-    }, 3500);
+    }, 2000);
   }
   function stopHandoffPolling() { if (pollIntervalId) { clearInterval(pollIntervalId); pollIntervalId = null; } }
 
@@ -850,6 +859,8 @@ const EMBED_SCRIPT = `
     mic: '<path d="M12 19v3"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><rect x="9" y="2" width="6" height="13" rx="3"/>',
     user: '<circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/>',
     bot: '<path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/>',
+    headphones:
+      '<path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/>',
     send: '<path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/>',
     x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
     clip: '<path d="m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551"/>',
@@ -870,6 +881,87 @@ const EMBED_SCRIPT = `
   }
   function caiEscapeHtml(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+  }
+  function caiSafeMarkdownHref(url) {
+    var u = String(url).trim();
+    if (!/^https?:\/\//i.test(u)) return '';
+    return caiEscapeHtml(u);
+  }
+  function caiInlineMarkdownToSafeHtml(line) {
+    var s = caiEscapeHtml(line);
+    s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    s = s.replace(/`([^`]+)`/g, '<code style="font-size:0.92em;padding:0.12em 0.35em;border-radius:4px;background:rgba(0,0,0,0.07)">$1</code>');
+    s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, function (_, label, url) {
+      var h = caiSafeMarkdownHref(url);
+      if (!h) return label;
+      return (
+        '<a href="' +
+        h +
+        '" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;font-weight:500">' +
+        label +
+        '</a>'
+      );
+    });
+    return s;
+  }
+  function caiRenderMarkdownInto(container, raw) {
+    var text = String(raw == null ? '' : raw);
+    container.innerHTML = '';
+    if (!text.trim()) {
+      container.textContent = '';
+      return;
+    }
+    var blocks = text.split(/\n\s*\n/);
+    for (var bi = 0; bi < blocks.length; bi++) {
+      var block = blocks[bi].replace(/^\n+|\n+$/g, '').trim();
+      if (!block) continue;
+      var lines = block.split('\n');
+      var listItems = [];
+      var isList = true;
+      for (var li = 0; li < lines.length; li++) {
+        var ln = lines[li];
+        if (ln.trim() === '') continue;
+        var mm = /^\s*[-*]\s+(.*)$/.exec(ln);
+        if (!mm) {
+          isList = false;
+          break;
+        }
+        listItems.push(mm[1]);
+      }
+      if (isList && listItems.length > 0) {
+        var ul = document.createElement('ul');
+        ul.style.cssText =
+          'margin:4px 0 10px 0;padding-left:1.25em;line-height:1.45;list-style-type:disc;';
+        for (var uj = 0; uj < listItems.length; uj++) {
+          var liEl = document.createElement('li');
+          liEl.innerHTML = caiInlineMarkdownToSafeHtml(listItems[uj]);
+          ul.appendChild(liEl);
+        }
+        container.appendChild(ul);
+      } else {
+        var div = document.createElement('div');
+        div.style.cssText = 'margin:0 0 10px 0;line-height:1.45;';
+        var bodyLines = block.split('\n');
+        div.innerHTML = bodyLines.map(function (ln) {
+          return caiInlineMarkdownToSafeHtml(ln);
+        }).join('<br>');
+        container.appendChild(div);
+      }
+    }
+    var last = container.lastChild;
+    if (last && last.style) last.style.marginBottom = '0';
+    if (!container.firstChild) container.textContent = text;
+  }
+  function caiFillAgentBubble(bubble, content, isHumanAgent) {
+    bubble.innerHTML = '';
+    var roleLabel = document.createElement('div');
+    roleLabel.style.cssText =
+      'font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;opacity:0.8;margin-bottom:4px;';
+    roleLabel.textContent = isHumanAgent ? 'Human agent' : 'AI assistant';
+    bubble.appendChild(roleLabel);
+    var body = document.createElement('div');
+    caiRenderMarkdownInto(body, content);
+    bubble.appendChild(body);
   }
   function caiWelcomeRowHtml(m, welcomeRaw) {
     var text = welcomeRaw == null || welcomeRaw === '' ? 'How can I help?' : String(welcomeRaw);
@@ -968,6 +1060,100 @@ const EMBED_SCRIPT = `
   function hideProactiveWelcome() {
     if (welcomeCardEl && welcomeCardEl.parentNode) welcomeCardEl.parentNode.removeChild(welcomeCardEl);
     welcomeCardEl = null;
+  }
+
+  function clearInactivityTimers() {
+    if (inactivityWarningTimerId) {
+      clearTimeout(inactivityWarningTimerId);
+      inactivityWarningTimerId = null;
+    }
+    if (inactivityCloseTimerId) {
+      clearTimeout(inactivityCloseTimerId);
+      inactivityCloseTimerId = null;
+    }
+    if (inactivityBannerEl && inactivityBannerEl.parentNode) {
+      inactivityBannerEl.parentNode.removeChild(inactivityBannerEl);
+    }
+    inactivityBannerEl = null;
+  }
+
+  function showInactivityBanner() {
+    if (!listEl || conversationEnded) return;
+    if (inactivityBannerEl && inactivityBannerEl.parentNode) {
+      inactivityBannerEl.parentNode.removeChild(inactivityBannerEl);
+    }
+    inactivityBannerEl = null;
+    var wrap = document.createElement('div');
+    wrap.setAttribute('data-cai-inactivity', '1');
+    wrap.style.cssText =
+      'display:flex;flex-direction:column;gap:10px;align-self:flex-start;max-width:100%;padding:12px 14px;border-radius:12px;border:1px solid rgba(245,158,11,0.5);background:rgba(254,243,199,0.96);color:#92400e;font-size:13px;line-height:1.45;';
+    var p = document.createElement('p');
+    p.style.cssText = 'margin:0;';
+    p.textContent =
+      'Do you have any other questions? This chat will close in 1 minute due to inactivity.';
+    wrap.appendChild(p);
+    var stay = document.createElement('button');
+    stay.type = 'button';
+    stay.textContent = 'Stay in chat';
+    var sendBg = (config.footer && config.footer.sendButtonBackground) || config.primaryColor || '#2563eb';
+    stay.style.cssText =
+      'align-self:flex-start;padding:8px 14px;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:' +
+      sendBg +
+      ';color:' +
+      ((config.footer && config.footer.sendButtonTextColor) || '#fff') +
+      ';';
+    stay.onmouseenter = function () {
+      stay.style.opacity = '0.9';
+    };
+    stay.onmouseleave = function () {
+      stay.style.opacity = '1';
+    };
+    stay.onclick = function () {
+      clearInactivityTimers();
+      scheduleInactivityTimersAfterCustomerActivity();
+    };
+    wrap.appendChild(stay);
+    if (endedFlowEl && endedFlowEl.parentNode === listEl) listEl.insertBefore(wrap, endedFlowEl);
+    else listEl.appendChild(wrap);
+    inactivityBannerEl = wrap;
+    listEl.scrollTop = listEl.scrollHeight;
+  }
+
+  function scheduleInactivityTimersAfterCustomerActivity() {
+    clearInactivityTimers();
+    if (!conversationId || conversationEnded) return;
+    var hasCustomer = false;
+    for (var hi = 0; hi < messages.length; hi++) {
+      if (messages[hi].sender === 'customer') {
+        hasCustomer = true;
+        break;
+      }
+    }
+    if (!hasCustomer) return;
+    var mins = config.inactivityMinutes;
+    if (mins === 0 || mins === '0') return;
+    if (mins == null || mins === '' || isNaN(Number(mins))) mins = 3;
+    mins = Number(mins);
+    if (mins < 2) mins = 2;
+    if (mins > 120) mins = 120;
+    var warningMs = Math.max(1, mins - 1) * 60 * 1000;
+    inactivityWarningTimerId = setTimeout(function () {
+      inactivityWarningTimerId = null;
+      showInactivityBanner();
+      inactivityCloseTimerId = setTimeout(function () {
+        inactivityCloseTimerId = null;
+        var cid = conversationId;
+        if (!cid || conversationEnded) return;
+        clearInactivityTimers();
+        trpcMutate('widget.endConversation', { conversationId: cid })
+          .then(function (res) {
+            var u = trpcUnwrap(res);
+            if (u.error || !u.data || u.data.success !== true) return;
+            applyServerClosedConversation(cid);
+          })
+          .catch(function () {});
+      }, 60 * 1000);
+    }, warningMs);
   }
 
   function render() {
@@ -1071,23 +1257,76 @@ const EMBED_SCRIPT = `
       if (typeof refreshVoiceFooterLabel === 'function') refreshVoiceFooterLabel();
     }
 
-    function applyWidgetSendResult(result, sendMessageCid) {
+    function removeStreamAgentRow(bubble) {
+      if (!bubble || !bubble.parentNode) return;
+      var prow = bubble.parentNode;
+      if (prow.parentNode) prow.parentNode.removeChild(prow);
+    }
+
+    function openStreamingAgentBubble() {
+      var m = config.messages || {};
+      var row = document.createElement('div');
+      row.className = 'cai-msg-agent';
+      row.style.cssText =
+        'display:flex;align-items:flex-end;gap:8px;flex-direction:row;align-self:flex-start;';
+      var bubble = document.createElement('div');
+      bubble.style.cssText =
+        'max-width:85%;padding:10px 14px;border-radius:' +
+        (m.bubbleBorderRadius || 12) +
+        'px;font-size:' +
+        (m.fontSize || 14) +
+        'px;background:' +
+        (m.agentBubbleBackground || '#f0f0f0') +
+        ';color:' +
+        (m.agentBubbleTextColor || '#111') +
+        ';box-shadow:0 1px 3px rgba(0,0,0,.08);';
+      bubble.textContent = '';
+      var avatar = document.createElement('div');
+      avatar.style.cssText =
+        'width:28px;height:28px;flex-shrink:0;border-radius:50%;display:flex;align-items:center;justify-content:center;background:' +
+        (m.agentBubbleBackground || '#f0f0f0') +
+        ';color:' +
+        (m.agentBubbleTextColor || '#111') +
+        ';border:2px solid ' +
+        (m.agentBubbleBackground || '#f0f0f0') +
+        ';box-sizing:border-box;';
+      avatar.setAttribute('aria-hidden', 'true');
+      avatar.appendChild(caiSvg(CAI.bot, 14));
+      row.appendChild(avatar);
+      row.appendChild(bubble);
+      row.dataset.msg = '1';
+      if (endedFlowEl && endedFlowEl.parentNode === listEl) listEl.insertBefore(row, endedFlowEl);
+      else listEl.appendChild(row);
+      listEl.scrollTop = listEl.scrollHeight;
+      return { row: row, bubble: bubble };
+    }
+
+    function applyWidgetSendResult(result, sendMessageCid, streamOpts) {
+      streamOpts = streamOpts || {};
       if (!result) {
+        if (streamOpts.streamBubble) removeStreamAgentRow(streamOpts.streamBubble);
         appendMsg('agent', 'Something went wrong. Please try again.');
         return;
       }
       var reply = result.response;
       var hasReply = typeof reply === 'string' ? reply.trim().length > 0 : !!reply;
-      if (hasReply) {
+        if (hasReply) {
         var replyText = typeof reply === 'string' ? reply.trim() : reply;
-        appendMsg('agent', replyText);
+        if (streamOpts.streamBubble) {
+          caiFillAgentBubble(streamOpts.streamBubble, replyText, false);
+          messages.push({ sender: 'agent', content: replyText });
+        } else {
+          appendMsg('agent', replyText);
+        }
         if (voiceEnabled && mode === 'voice') playAgentSpeech(replyText);
       } else if (result.handoffRequested) {
+        if (streamOpts.streamBubble) removeStreamAgentRow(streamOpts.streamBubble);
         appendMsg(
           'agent',
           'Thanks — we are connecting you with a team member. Someone will reply here shortly.'
         );
       } else {
+        if (streamOpts.streamBubble) removeStreamAgentRow(streamOpts.streamBubble);
         appendMsg(
           'agent',
           'Thanks for your message. A team member will reply here shortly.'
@@ -1116,68 +1355,118 @@ const EMBED_SCRIPT = `
         if (typeof refreshVoiceFooterLabel === 'function') refreshVoiceFooterLabel();
       }
       showReplyPendingIndicator();
-      if (conversationId) {
-        var cidSend = conversationId;
-        trpcMutate('widget.sendMessage', { conversationId: conversationId, content: text, attachmentUrl: attachmentUrl || undefined }).then(function (res) {
-          voiceSendPending = false;
-          if (voiceEnabled && mode === 'voice' && typeof refreshVoiceFooterLabel === 'function') refreshVoiceFooterLabel();
-          hideReplyPendingIndicator();
-          var u = trpcUnwrap(res);
-          if (u.error) {
-            appendMsg('agent', u.error);
-            return;
+      var cidSend = conversationId;
+      var streamBody = {
+        apiKey: apiKey,
+        customerId: customerId,
+        channel: ch,
+        content: text,
+        attachmentUrl: attachmentUrl || undefined,
+      };
+      if (conversationId) streamBody.conversationId = conversationId;
+      fetch(baseUrl + '/api/widget/stream', {
+        method: 'POST',
+        credentials: 'omit',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(streamBody),
+      })
+        .then(function (res) {
+          if (!res.ok) throw new Error('stream_http');
+          var reader = res.body ? res.body.getReader() : null;
+          if (!reader) throw new Error('no_body');
+          var decoder = new TextDecoder();
+          var buf = '';
+          var streamBubble = null;
+          var finished = false;
+          function finishVoiceUi() {
+            voiceSendPending = false;
+            if (voiceEnabled && mode === 'voice' && typeof refreshVoiceFooterLabel === 'function')
+              refreshVoiceFooterLabel();
           }
-          if (u.data == null) {
-            appendMsg('agent', 'Could not load a reply. Please try again.');
-            return;
+          function pump() {
+            return reader.read().then(function (r) {
+              if (finished) return;
+              if (r.done) {
+                if (!finished) {
+                  finishVoiceUi();
+                  hideReplyPendingIndicator();
+                  appendMsg('agent', 'Connection ended unexpectedly.');
+                }
+                return;
+              }
+              buf += decoder.decode(r.value, { stream: true });
+              var parts = buf.split('\\n\\n');
+              buf = parts.pop() || '';
+              for (var pi = 0; pi < parts.length; pi++) {
+                var block = parts[pi].trim();
+                if (block.indexOf('data:') !== 0) continue;
+                var jsonStr = block.replace(/^data:\\s*/, '');
+                var ev;
+                try {
+                  ev = JSON.parse(jsonStr);
+                } catch (eStream) {
+                  continue;
+                }
+                if (ev.type === 'delta' && ev.text) {
+                  if (!streamBubble) {
+                    hideReplyPendingIndicator();
+                    var opened = openStreamingAgentBubble();
+                    streamBubble = opened.bubble;
+                  }
+                  streamBubble.textContent += ev.text;
+                  if (listEl) listEl.scrollTop = listEl.scrollHeight;
+                } else if (ev.type === 'done') {
+                  finished = true;
+                  finishVoiceUi();
+                  hideReplyPendingIndicator();
+                  var result = ev.result;
+                  if (result && result.unavailable) {
+                    removeStreamAgentRow(streamBubble);
+                    appendMsg(
+                      'agent',
+                      result.message ||
+                        'We are unable to take your message at the moment. Please try again later.'
+                    );
+                    return;
+                  }
+                  if (result && result.conversationId && !cidSend) {
+                    conversationId = result.conversationId;
+                    conversationEnded = false;
+                    endedConversationId = null;
+                    ratingSubmitted = false;
+                    removeEndedFlow();
+                  }
+                  if (result == null) {
+                    removeStreamAgentRow(streamBubble);
+                    appendMsg('agent', 'Could not start the conversation. Please try again.');
+                    return;
+                  }
+                  applyWidgetSendResult(result, cidSend, { streamBubble: streamBubble });
+                  return;
+                } else if (ev.type === 'error') {
+                  finished = true;
+                  finishVoiceUi();
+                  hideReplyPendingIndicator();
+                  removeStreamAgentRow(streamBubble);
+                  appendMsg(
+                    'agent',
+                    typeof ev.message === 'string' ? ev.message : 'Something went wrong.'
+                  );
+                  return;
+                }
+              }
+              return pump();
+            });
           }
-          applyWidgetSendResult(u.data, cidSend);
-        }).catch(function () {
+          return pump();
+        })
+        .catch(function () {
           voiceSendPending = false;
-          if (voiceEnabled && mode === 'voice' && typeof refreshVoiceFooterLabel === 'function') refreshVoiceFooterLabel();
+          if (voiceEnabled && mode === 'voice' && typeof refreshVoiceFooterLabel === 'function')
+            refreshVoiceFooterLabel();
           hideReplyPendingIndicator();
           appendMsg('agent', 'Could not reach the chat service. Check your connection and try again.');
         });
-      } else {
-        trpcMutate('widget.sendFirstMessage', {
-          apiKey: apiKey,
-          customerId: customerId,
-          channel: ch,
-          content: text,
-          attachmentUrl: attachmentUrl || undefined,
-        }).then(function (res) {
-          voiceSendPending = false;
-          if (voiceEnabled && mode === 'voice' && typeof refreshVoiceFooterLabel === 'function') refreshVoiceFooterLabel();
-          hideReplyPendingIndicator();
-          var u = trpcUnwrap(res);
-          if (u.error) {
-            appendMsg('agent', u.error);
-            return;
-          }
-          var result = u.data;
-          if (result && result.unavailable) {
-            appendMsg('agent', result.message || 'We are unable to take your message at the moment. Please try again later.');
-            return;
-          }
-          if (result && result.conversationId) {
-            conversationId = result.conversationId;
-            conversationEnded = false;
-            endedConversationId = null;
-            ratingSubmitted = false;
-            removeEndedFlow();
-          }
-          if (result == null) {
-            appendMsg('agent', 'Could not start the conversation. Please try again.');
-            return;
-          }
-          applyWidgetSendResult(result, null);
-        }).catch(function () {
-          voiceSendPending = false;
-          if (voiceEnabled && mode === 'voice' && typeof refreshVoiceFooterLabel === 'function') refreshVoiceFooterLabel();
-          hideReplyPendingIndicator();
-          appendMsg('agent', 'Could not reach the chat service. Check your connection and try again.');
-        });
-      }
     }
 
     function processVoiceRecordedBlob(blob) {
@@ -1311,6 +1600,7 @@ const EMBED_SCRIPT = `
       closeBtn.onmouseenter = function() { closeBtn.style.background = 'rgba(0,0,0,.06)'; closeBtn.style.color = '#111'; };
       closeBtn.onmouseleave = function() { closeBtn.style.background = 'none'; closeBtn.style.color = '#666'; };
       closeBtn.onclick = function() {
+        clearInactivityTimers();
         endVoiceEmbedSession();
         panel.style.display = 'none';
         stopHandoffPolling();
@@ -1614,6 +1904,16 @@ const EMBED_SCRIPT = `
       listEl.innerHTML = caiWelcomeRowHtml(m, config.welcomeMessage || 'How can I help?');
     } else {
       messages.forEach(function(msg) { appendMsg(msg.sender, msg.content, true); });
+      if (conversationId) {
+        var cust = false;
+        for (var ii = 0; ii < messages.length; ii++) {
+          if (messages[ii].sender === 'customer') {
+            cust = true;
+            break;
+          }
+        }
+        if (cust) scheduleInactivityTimersAfterCustomerActivity();
+      }
     }
     if (conversationId) {
       trpcQuery('widget.getMessages', { conversationId: conversationId }).then(function(res) {
@@ -1636,7 +1936,9 @@ const EMBED_SCRIPT = `
 
   /** Agent closed chat in Live chat (or conversation ended server-side): match widget UI to server. */
   function applyServerClosedConversation(endedCid) {
+    clearInactivityTimers();
     hideReplyPendingIndicator();
+    hideHumanTypingIndicator();
     stopHandoffPolling();
     stopVoiceAgentOutput();
     tearDownHandoffWebRtc();
@@ -1811,8 +2113,68 @@ const EMBED_SCRIPT = `
     }
   }
 
+  function hideHumanTypingIndicator() {
+    if (caiHumanTypingEl) {
+      if (caiHumanTypingEl.parentNode) caiHumanTypingEl.parentNode.removeChild(caiHumanTypingEl);
+      caiHumanTypingEl = null;
+    }
+  }
+
+  function showHumanTypingIndicator() {
+    if (!listEl || caiReplyPendingEl) return;
+    hideHumanTypingIndicator();
+    var m = config.messages || {};
+    var agentBg = m.agentBubbleBackground || '#f0f0f0';
+    var agentFg = m.agentBubbleTextColor || '#111';
+    var row = document.createElement('div');
+    row.className = 'cai-msg-agent';
+    row.setAttribute('data-cai-human-typing', '1');
+    row.setAttribute('aria-live', 'polite');
+    row.style.cssText = 'display:flex;align-items:flex-end;gap:8px;flex-direction:row;align-self:flex-start;';
+    var avatar = document.createElement('div');
+    avatar.style.cssText =
+      'width:28px;height:28px;flex-shrink:0;border-radius:50%;display:flex;align-items:center;justify-content:center;background:' +
+      agentBg +
+      ';color:' +
+      agentFg +
+      ';border:2px solid ' +
+      agentBg +
+      ';box-sizing:border-box;';
+    avatar.setAttribute('aria-hidden', 'true');
+    avatar.appendChild(caiSvg(CAI.headphones, 14));
+    var bubble = document.createElement('div');
+    bubble.style.cssText =
+      'max-width:85%;padding:10px 14px;border-radius:' +
+      (m.bubbleBorderRadius || 12) +
+      'px;font-size:' +
+      (m.fontSize || 14) +
+      'px;background:' +
+      agentBg +
+      ';color:' +
+      agentFg +
+      ';box-shadow:0 1px 3px rgba(0,0,0,.08);display:flex;flex-direction:column;gap:6px;';
+    var label = document.createElement('span');
+    label.style.cssText = 'font-size:12px;opacity:0.85;line-height:1.2;';
+    label.textContent = 'Agent is typing…';
+    var dotsWrap = document.createElement('div');
+    dotsWrap.className = 'cai-reply-pending-dots';
+    dotsWrap.style.color = agentFg;
+    dotsWrap.appendChild(document.createElement('span'));
+    dotsWrap.appendChild(document.createElement('span'));
+    dotsWrap.appendChild(document.createElement('span'));
+    bubble.appendChild(label);
+    bubble.appendChild(dotsWrap);
+    row.appendChild(avatar);
+    row.appendChild(bubble);
+    if (endedFlowEl && endedFlowEl.parentNode === listEl) listEl.insertBefore(row, endedFlowEl);
+    else listEl.appendChild(row);
+    caiHumanTypingEl = row;
+    listEl.scrollTop = listEl.scrollHeight;
+  }
+
   function showReplyPendingIndicator() {
     hideReplyPendingIndicator();
+    hideHumanTypingIndicator();
     if (!listEl) return;
     var m = config.messages || {};
     var agentBg = m.agentBubbleBackground || '#f0f0f0';
@@ -1868,22 +2230,36 @@ const EMBED_SCRIPT = `
     if (listEl && listEl.querySelector && listEl.childNodes.length === 1 && listEl.querySelector('div') && !listEl.querySelector('div').dataset.msg) {
       listEl.innerHTML = '';
       hideReplyPendingIndicator();
+      hideHumanTypingIndicator();
     }
     if (!listEl) return;
     var m = config.messages || {};
     var isUser = sender === 'customer';
-    if (sender === 'human_agent') sender = 'agent';
+    var isHumanAgent = sender === 'human_agent';
     var row = document.createElement('div');
     row.className = isUser ? 'cai-msg-user' : 'cai-msg-agent';
     row.style.cssText =
       'display:flex;align-items:flex-end;gap:8px;' +
       (isUser ? 'flex-direction:row;justify-content:flex-end;align-self:flex-end;' : 'flex-direction:row;align-self:flex-start;');
     var bubble = document.createElement('div');
-    bubble.style.cssText = 'max-width:85%;padding:10px 14px;border-radius:' + (m.bubbleBorderRadius || 12) + 'px;font-size:' + (m.fontSize || 14) + 'px;background:' + (isUser ? (m.userBubbleBackground || config.primaryColor) : (m.agentBubbleBackground || '#f0f0f0')) + ';color:' + (isUser ? (m.userBubbleTextColor || '#fff') : (m.agentBubbleTextColor || '#111')) + ';box-shadow:0 1px 3px rgba(0,0,0,.08);';
-    bubble.textContent = content;
+    bubble.style.cssText =
+      'max-width:85%;min-width:0;padding:10px 14px;border-radius:' +
+      (m.bubbleBorderRadius || 12) +
+      'px;font-size:' +
+      (m.fontSize || 14) +
+      'px;background:' +
+      (isUser ? (m.userBubbleBackground || config.primaryColor) : (m.agentBubbleBackground || '#f0f0f0')) +
+      ';color:' +
+      (isUser ? (m.userBubbleTextColor || '#fff') : (m.agentBubbleTextColor || '#111')) +
+      ';box-shadow:0 1px 3px rgba(0,0,0,.08);';
+    if (isUser) {
+      bubble.textContent = content;
+    } else {
+      caiFillAgentBubble(bubble, content, isHumanAgent);
+    }
     var avatar = document.createElement('div');
     avatar.style.cssText = 'width:28px;height:28px;flex-shrink:0;border-radius:50%;display:flex;align-items:center;justify-content:center;background:' + (isUser ? (m.userBubbleBackground || config.primaryColor) : (m.agentBubbleBackground || '#f0f0f0')) + ';color:' + (isUser ? (m.userBubbleTextColor || '#fff') : (m.agentBubbleTextColor || '#111')) + ';border:2px solid ' + (isUser ? (m.userBubbleBackground || config.primaryColor) : (m.agentBubbleBackground || '#f0f0f0')) + ';box-sizing:border-box;';
-    avatar.appendChild(caiSvg(isUser ? CAI.user : CAI.bot, 14));
+    avatar.appendChild(caiSvg(isUser ? CAI.user : isHumanAgent ? CAI.headphones : CAI.bot, 14));
     if (isUser) {
       row.appendChild(bubble);
       row.appendChild(avatar);
@@ -1895,6 +2271,9 @@ const EMBED_SCRIPT = `
     if (endedFlowEl && endedFlowEl.parentNode === listEl) listEl.insertBefore(row, endedFlowEl);
     else listEl.appendChild(row);
     listEl.scrollTop = listEl.scrollHeight;
+    if (isUser && !noPush) {
+      scheduleInactivityTimersAfterCustomerActivity();
+    }
   }
 
   trpcQuery('widget.getConfig', { apiKey: apiKey }).then(function(res) {
@@ -1936,6 +2315,10 @@ const EMBED_SCRIPT = `
         if (c.showPoweredBy !== undefined) config.showPoweredBy = c.showPoweredBy;
         if (c.attachmentsEnabled !== undefined) config.attachmentsEnabled = c.attachmentsEnabled;
         if (c.defaultRatingType === 'nps' || c.defaultRatingType === 'thumbs') config.defaultRatingType = c.defaultRatingType;
+        if (c.inactivityMinutes != null && c.inactivityMinutes !== '') {
+          var im = Number(c.inactivityMinutes);
+          if (!isNaN(im)) config.inactivityMinutes = im;
+        }
         if (c.bubble) config.bubble = assignSection(config.bubble, c.bubble);
         if (c.popup) config.popup = assignSection(config.popup, c.popup);
         if (c.header) config.header = assignSection(config.header, c.header);

@@ -8,6 +8,7 @@ import {
   PenLine,
   Sparkles,
   Bot,
+  Headphones,
   UserRound,
   X,
   ThumbsUp,
@@ -20,6 +21,7 @@ import { clampWidgetPositionOffsetPx, type ChatbotWidgetConfig } from '@/lib/cha
 import { ConverseLogo } from '@/components/shared/converse-logo';
 import { cn } from '@/lib/utils';
 import { trpc } from '@/utils/trpc';
+import { ChatMarkdown } from '@/components/modules/chat/chat-markdown';
 
 interface LiveChatbotPreviewProps {
   config: ChatbotWidgetConfig;
@@ -165,65 +167,8 @@ export function LiveChatbotPreview({
   const userBubbleBg = msgCfg.userBubbleBackground || primary;
   const sendBtnBg = footer.sendButtonBackground || primary;
 
-  const sendFirstMessage = trpc.widget.sendFirstMessage.useMutation({
-    onSuccess: (data) => {
-      if (data && 'unavailable' in data) {
-        setMessages((prev) => [
-          ...prev,
-          { role: 'agent', content: (data as { message?: string }).message || 'We are unable to take your message at the moment.' },
-        ]);
-        return;
-      }
-      if (data?.conversationId) {
-        setConversationId(data.conversationId);
-        setEnded(false);
-        setEndedConversationId(null);
-        setRatingSubmitted(false);
-        onConversationInfo?.({ conversationId: data.conversationId, agentName: 'Unknown' });
-      }
-      if (data?.response != null) {
-        setMessages((prev) => [...prev, { role: 'agent', content: data.response }]);
-        startInactivityTimersAfterSend();
-        if (modeRef.current === 'voice') {
-          speakAgent(data.response);
-        }
-      }
-      if (data?.handoffRequested) setHandoffRequested(true);
-      if (data?.conversationEnded) {
-        setEndedConversationId(data.conversationId);
-        setConversationId(null);
-        setEnded(true);
-        setRatingSubmitted(false);
-        const endedMessages = (data as { messages?: ChatMessage[] }).messages ?? [];
-        const compiled = (data as { compiledData?: Record<string, unknown> }).compiledData ?? {};
-        onConversationEnd?.({ messages: endedMessages, compiledData: compiled });
-      }
-    },
-  });
-
-  const sendMessage = trpc.widget.sendMessage.useMutation({
-    onSuccess: (data) => {
-      if (data?.response != null) {
-        setMessages((prev) => [...prev, { role: 'agent', content: data.response }]);
-        startInactivityTimersAfterSend();
-        if (modeRef.current === 'voice') {
-          speakAgent(data.response);
-        }
-      }
-      if (data?.handoffRequested) {
-        setHandoffRequested(true);
-      }
-      if (data?.conversationEnded) {
-        setEndedConversationId(conversationId);
-        setConversationId(null);
-        setEnded(true);
-        setRatingSubmitted(false);
-        const endedMessages = (data as { messages?: ChatMessage[] }).messages ?? [];
-        const compiled = (data as { compiledData?: Record<string, unknown> }).compiledData ?? {};
-        onConversationEnd?.({ messages: endedMessages, compiledData: compiled });
-      }
-    },
-  });
+  const [isStreamSending, setIsStreamSending] = useState(false);
+  const streamAgentIndexRef = useRef<number | null>(null);
 
   const endConversation = trpc.widget.endConversation.useMutation({
     onSuccess: (data, variables) => {
@@ -316,7 +261,7 @@ export function LiveChatbotPreview({
 
   const { data: handoffMessages } = trpc.widget.getMessages.useQuery(
     { conversationId: conversationId! },
-    { enabled: !!conversationId && handoffRequested, refetchInterval: 3500 }
+    { enabled: !!conversationId && handoffRequested, refetchInterval: 2000 }
   );
 
   const processTtsQueue = useCallback(() => {
@@ -369,7 +314,12 @@ export function LiveChatbotPreview({
     handoffMessagesSyncRef.current = signature;
     setMessages(
       list.map((m) => ({
-        role: m.senderType === 'customer' ? 'customer' : ('agent' as 'agent'),
+        role:
+          m.senderType === 'customer'
+            ? 'customer'
+            : m.senderType === 'human_agent'
+              ? 'human_agent'
+              : 'agent',
         content: m.content,
         payload: m.payload ?? undefined,
       }))
@@ -564,24 +514,202 @@ export function LiveChatbotPreview({
     }, warningMs);
   }, [ended, inactivityMinutes, clearInactivityTimers]);
 
+  type WidgetStreamPayload = {
+    response?: string | null;
+    handoffRequested?: boolean;
+    conversationEnded?: boolean;
+    conversationId?: string;
+    unavailable?: 'outside_hours' | 'queue_full';
+    message?: string | null;
+    compiledData?: Record<string, unknown>;
+    messages?: ChatMessage[];
+  };
+
+  const finalizeWidgetStreamResult = useCallback(
+    (data: WidgetStreamPayload | null, streamIdx: number | null, isFirstMessage: boolean) => {
+      if (!data) {
+        if (streamIdx != null) {
+          setMessages((prev) => prev.filter((_, i) => i !== streamIdx));
+        }
+        setMessages((prev) => [...prev, { role: 'agent', content: 'Something went wrong.' }]);
+        return;
+      }
+      if (data.unavailable) {
+        if (streamIdx != null) {
+          setMessages((prev) => prev.filter((_, i) => i !== streamIdx));
+        }
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: 'agent',
+            content: data.message || 'We are unable to take your message at the moment.',
+          },
+        ]);
+        return;
+      }
+      if (isFirstMessage && data.conversationId) {
+        setConversationId(data.conversationId);
+        setEnded(false);
+        setEndedConversationId(null);
+        setRatingSubmitted(false);
+        onConversationInfo?.({ conversationId: data.conversationId, agentName: 'Unknown' });
+      }
+      const reply = data.response;
+      const hasReply = typeof reply === 'string' ? reply.trim().length > 0 : !!reply;
+      if (hasReply && streamIdx != null) {
+        const text = typeof reply === 'string' ? reply.trim() : String(reply);
+        setMessages((prev) =>
+          prev.map((m, i) => (i === streamIdx ? { ...m, content: text } : m))
+        );
+        if (modeRef.current === 'voice') speakAgent(text);
+      } else if (hasReply && streamIdx == null) {
+        const text = typeof reply === 'string' ? reply.trim() : String(reply);
+        setMessages((prev) => [...prev, { role: 'agent', content: text }]);
+        if (modeRef.current === 'voice') speakAgent(text);
+      } else if (data.handoffRequested) {
+        if (streamIdx != null) {
+          setMessages((prev) => prev.filter((_, i) => i !== streamIdx));
+        }
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: 'agent',
+            content:
+              'Thanks — we are connecting you with a team member. Someone will reply here shortly.',
+          },
+        ]);
+      } else {
+        if (streamIdx != null) {
+          setMessages((prev) => prev.filter((_, i) => i !== streamIdx));
+        }
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: 'agent',
+            content: 'Thanks for your message. A team member will reply here shortly.',
+          },
+        ]);
+      }
+      if (data.handoffRequested) setHandoffRequested(true);
+      if (data.conversationEnded) {
+        const cid =
+          isFirstMessage && data.conversationId
+            ? data.conversationId
+            : conversationIdRef.current ?? undefined;
+        setEndedConversationId(cid ?? null);
+        setConversationId(null);
+        setEnded(true);
+        setRatingSubmitted(false);
+        onConversationEnd?.({
+          messages: data.messages ?? [],
+          compiledData: data.compiledData ?? {},
+        });
+      }
+    },
+    [onConversationInfo, onConversationEnd, speakAgent]
+  );
+
+  const runWidgetChatStream = useCallback(
+    async (body: Record<string, unknown>) => {
+      const isFirstMessage = !body.conversationId;
+      streamAgentIndexRef.current = null;
+      const res = await fetch('/api/widget/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error('stream_failed');
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error('no_body');
+      const decoder = new TextDecoder();
+      let buf = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const parts = buf.split('\n\n');
+        buf = parts.pop() ?? '';
+        for (const block of parts) {
+          const line = block.trim();
+          if (!line.startsWith('data:')) continue;
+          const jsonStr = line.replace(/^data:\s*/, '');
+          let ev: {
+            type?: string;
+            text?: string;
+            result?: WidgetStreamPayload;
+            message?: string;
+          };
+          try {
+            ev = JSON.parse(jsonStr) as typeof ev;
+          } catch {
+            continue;
+          }
+          if (ev.type === 'delta' && ev.text) {
+            setMessages((prev) => {
+              if (streamAgentIndexRef.current == null) {
+                const next = [...prev, { role: 'agent' as const, content: ev.text! }];
+                streamAgentIndexRef.current = next.length - 1;
+                return next;
+              }
+              const i = streamAgentIndexRef.current;
+              return prev.map((m, idx) =>
+                idx === i ? { ...m, content: m.content + ev.text! } : m
+              );
+            });
+          } else if (ev.type === 'done' && ev.result) {
+            const idx = streamAgentIndexRef.current;
+            streamAgentIndexRef.current = null;
+            finalizeWidgetStreamResult(ev.result, idx, isFirstMessage);
+            return;
+          } else if (ev.type === 'error') {
+            const idx = streamAgentIndexRef.current;
+            streamAgentIndexRef.current = null;
+            setMessages((prev) => {
+              let next = prev;
+              if (idx != null) next = next.filter((_, i) => i !== idx);
+              return [...next, { role: 'agent', content: ev.message || 'Something went wrong.' }];
+            });
+            return;
+          }
+        }
+      }
+      const idx = streamAgentIndexRef.current;
+      streamAgentIndexRef.current = null;
+      finalizeWidgetStreamResult(null, idx, isFirstMessage);
+    },
+    [finalizeWidgetStreamResult]
+  );
+
   const handleSend = useCallback(
-    (attachmentUrl?: string) => {
+    async (attachmentUrl?: string) => {
       const text = input.trim() || (attachmentUrl ? '(attachment)' : '');
       if (!text) return;
-      if (conversationId) {
-        if (sendMessage.isPending) return;
-      } else {
-        if (!apiKey || sendFirstMessage.isPending) return;
-      }
+      if (isStreamSending) return;
+      if (!conversationId && !apiKey) return;
       const channel = mode === 'voice' ? 'call' : 'text';
       setInput('');
       setMessages((prev) => [...prev, { role: 'customer', content: text }]);
-      if (conversationId) {
-        sendMessage.mutate({ conversationId, content: text, attachmentUrl });
-      } else {
-        sendFirstMessage.mutate({ apiKey, customerId, channel, content: text, attachmentUrl });
-      }
       startInactivityTimersAfterSend();
+      setIsStreamSending(true);
+      streamAgentIndexRef.current = null;
+      try {
+        const body: Record<string, unknown> = {
+          apiKey,
+          customerId,
+          channel,
+          content: text,
+          ...(attachmentUrl ? { attachmentUrl } : {}),
+        };
+        if (conversationId) body.conversationId = conversationId;
+        await runWidgetChatStream(body);
+      } catch {
+        setMessages((prev) => [
+          ...prev,
+          { role: 'agent', content: 'Could not reach the chat service. Try again.' },
+        ]);
+      } finally {
+        setIsStreamSending(false);
+      }
     },
     [
       input,
@@ -589,8 +717,8 @@ export function LiveChatbotPreview({
       apiKey,
       customerId,
       mode,
-      sendMessage,
-      sendFirstMessage,
+      isStreamSending,
+      runWidgetChatStream,
       startInactivityTimersAfterSend,
     ]
   );
@@ -668,15 +796,24 @@ export function LiveChatbotPreview({
         const content = text?.trim() || '(no speech detected)';
         setMessages((prev) => [...prev, { role: 'customer', content }]);
         startInactivityTimersAfterSend();
-        if (conversationIdRef.current) {
-          sendMessage.mutate({ conversationId: conversationIdRef.current, content });
-        } else {
-          sendFirstMessage.mutate({
+        setIsStreamSending(true);
+        streamAgentIndexRef.current = null;
+        try {
+          const body: Record<string, unknown> = {
             apiKey,
             customerId,
             channel: 'call',
             content,
-          });
+          };
+          if (conversationIdRef.current) body.conversationId = conversationIdRef.current;
+          await runWidgetChatStream(body);
+        } catch {
+          setMessages((prev) => [
+            ...prev,
+            { role: 'agent', content: 'Could not reach the chat service. Try again.' },
+          ]);
+        } finally {
+          setIsStreamSending(false);
         }
       } catch (err) {
         console.error('Voice: transcribe or send failed', err);
@@ -687,8 +824,7 @@ export function LiveChatbotPreview({
       customerId,
       recordingToWav,
       transcribeVoice,
-      sendMessage,
-      sendFirstMessage,
+      runWidgetChatStream,
       startInactivityTimersAfterSend,
     ]
   );
@@ -1026,7 +1162,7 @@ export function LiveChatbotPreview({
                   >
                     <Sparkles className="size-3.5" />
                   </span>
-                  <span className="leading-snug">{config.welcomeMessage}</span>
+                  <ChatMarkdown text={config.welcomeMessage} className="leading-snug" />
                 </div>
 
                 {/* Real messages */}
@@ -1082,11 +1218,16 @@ export function LiveChatbotPreview({
                           backgroundColor: msgCfg.agentBubbleBackground,
                           color: msgCfg.agentBubbleTextColor,
                         }}
+                        aria-hidden
                       >
-                        <Bot className="size-3.5" />
+                        {msg.role === 'human_agent' ? (
+                          <Headphones className="size-3.5" />
+                        ) : (
+                          <Bot className="size-3.5" />
+                        )}
                       </span>
                       <div
-                        className="max-w-[85%] rounded-2xl px-4 py-2.5 shadow-sm"
+                        className="max-w-[85%] min-w-0 rounded-2xl px-4 py-2.5 shadow-sm"
                         style={{
                           backgroundColor: msgCfg.agentBubbleBackground,
                           color: msgCfg.agentBubbleTextColor,
@@ -1094,14 +1235,17 @@ export function LiveChatbotPreview({
                           borderRadius: msgCfg.bubbleBorderRadius,
                         }}
                       >
-                        {msg.content}
+                        <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide opacity-80">
+                          {msg.role === 'human_agent' ? 'Human agent' : 'AI assistant'}
+                        </div>
+                        <ChatMarkdown text={msg.content} className="[&_p:first-child]:mt-0" />
                       </div>
                     </div>
                   )
                 )}
 
-                {/* Typing indicator */}
-                {(sendMessage.isPending || sendFirstMessage.isPending) && (
+                {/* Typing indicator: AI stream vs human agent (handoff poll) */}
+                {isStreamSending && (
                   <div className="flex items-end justify-start gap-2">
                     <span
                       className="flex size-7 shrink-0 items-center justify-center rounded-full shadow-sm"
@@ -1111,6 +1255,35 @@ export function LiveChatbotPreview({
                       }}
                     >
                       <Bot className="size-3.5" />
+                    </span>
+                    <div
+                      className="flex flex-col gap-1 rounded-2xl px-4 py-3 shadow-sm"
+                      style={{
+                        backgroundColor: msgCfg.agentBubbleBackground,
+                        borderRadius: msgCfg.bubbleBorderRadius,
+                      }}
+                    >
+                      <span className="text-xs font-medium opacity-80" style={{ color: msgCfg.agentBubbleTextColor }}>
+                        Agent is typing…
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <span className="size-2 rounded-full bg-current opacity-40 animate-bounce [animation-delay:0ms]" style={{ color: msgCfg.agentBubbleTextColor }} />
+                        <span className="size-2 rounded-full bg-current opacity-40 animate-bounce [animation-delay:150ms]" style={{ color: msgCfg.agentBubbleTextColor }} />
+                        <span className="size-2 rounded-full bg-current opacity-40 animate-bounce [animation-delay:300ms]" style={{ color: msgCfg.agentBubbleTextColor }} />
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {!isStreamSending && handoffMessages?.agentTyping && (
+                  <div className="flex items-end justify-start gap-2">
+                    <span
+                      className="flex size-7 shrink-0 items-center justify-center rounded-full shadow-sm"
+                      style={{
+                        backgroundColor: msgCfg.agentBubbleBackground,
+                        color: msgCfg.agentBubbleTextColor,
+                      }}
+                    >
+                      <Headphones className="size-3.5" />
                     </span>
                     <div
                       className="flex flex-col gap-1 rounded-2xl px-4 py-3 shadow-sm"
@@ -1339,7 +1512,7 @@ export function LiveChatbotPreview({
                       <button
                         type="button"
                         onClick={() => handleSend()}
-                        disabled={!input.trim() || (conversationId ? sendMessage.isPending : !apiKey || sendFirstMessage.isPending)}
+                        disabled={!input.trim() || isStreamSending || (!conversationId && !apiKey)}
                         className="flex size-10 shrink-0 items-center justify-center rounded-full transition-transform active:scale-95 hover:opacity-90 disabled:opacity-50"
                         style={{
                           backgroundColor: sendBtnBg,
@@ -1402,7 +1575,7 @@ export function LiveChatbotPreview({
                         ? 'Start call — speak naturally, agent replies when you pause'
                         : isPlayingAgentAudio
                           ? 'Agent speaking…'
-                          : transcribeVoice.isPending || sendMessage.isPending || sendFirstMessage.isPending
+                          : transcribeVoice.isPending || isStreamSending
                             ? 'Sending…'
                             : 'Listening… speak, then pause to get a reply'}
                     </span>

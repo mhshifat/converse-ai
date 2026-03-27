@@ -173,6 +173,7 @@ model conversation {
   rated_at                  DateTime?
   first_response_at         DateTime? // first agent reply (SLA)
   transferred_to_agent_id   String?   // when transferred to another human
+  human_agent_typing_at     DateTime? // last ping while assigned human is composing (widget “typing…”)
   skill_tags                Json?     // string[] for queue routing
   chatbot                   chatbot   @relation(fields: [chatbot_id], references: [id])
   agent                     agent     @relation("AgentConversations", fields: [agent_id], references: [id])

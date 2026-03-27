@@ -96,6 +96,11 @@ export interface ChatbotWidgetConfig {
   /** Allow users to attach files (images, PDF, text) in the chat input. */
   attachmentsEnabled: boolean;
   /**
+   * Customer idle timeout (minutes): after this long with no customer messages, show a warning;
+   * 1 minute later the conversation ends (same as playground). Use 0 to disable. Default 3.
+   */
+  inactivityMinutes?: number;
+  /**
    * URL path prefixes where the embed must not load (e.g. `/checkout`, `/cart`).
    * Matched against `location.pathname` (normalized with a leading `/`).
    * Supports: plain prefix `/docs` (hides `/docs` and `/docs/...`); dynamic segments `/report/:id`
@@ -192,6 +197,7 @@ export const DEFAULT_WIDGET_CONFIG: ChatbotWidgetConfig = {
   showPoweredBy: true,
   defaultRatingType: 'thumbs',
   attachmentsEnabled: false,
+  inactivityMinutes: 3,
   embedHiddenPaths: [],
   embedHiddenSubdomains: [],
   widgetPathInsets: [],
@@ -449,6 +455,14 @@ export function mergeWidgetConfig(
     showPoweredBy: (c.showPoweredBy as boolean) ?? DEFAULT_WIDGET_CONFIG.showPoweredBy,
     defaultRatingType: (c.defaultRatingType as 'thumbs' | 'nps') ?? DEFAULT_WIDGET_CONFIG.defaultRatingType,
     attachmentsEnabled: (c.attachmentsEnabled as boolean) ?? DEFAULT_WIDGET_CONFIG.attachmentsEnabled,
+    inactivityMinutes: (function () {
+      if (c.inactivityMinutes === undefined || c.inactivityMinutes === null || c.inactivityMinutes === '') {
+        return DEFAULT_WIDGET_CONFIG.inactivityMinutes;
+      }
+      var n = Number(c.inactivityMinutes);
+      if (isNaN(n)) return DEFAULT_WIDGET_CONFIG.inactivityMinutes;
+      return Math.max(0, Math.min(120, Math.round(n)));
+    })(),
     embedHiddenPaths: mergeEmbedHiddenPathsFromStored(c.embedHiddenPaths),
     embedHiddenSubdomains: mergeEmbedHiddenSubdomainsFromStored(c.embedHiddenSubdomains),
     widgetPathInsets: mergeWidgetPathInsetsFromStored(c.widgetPathInsets),
@@ -479,6 +493,7 @@ export function widgetConfigToStorage(config: ChatbotWidgetConfig): Record<strin
     showPoweredBy: config.showPoweredBy,
     defaultRatingType: config.defaultRatingType,
     attachmentsEnabled: config.attachmentsEnabled,
+    inactivityMinutes: config.inactivityMinutes,
     embedHiddenPaths: config.embedHiddenPaths ?? [],
     embedHiddenSubdomains: mergeEmbedHiddenSubdomainsFromStored(config.embedHiddenSubdomains ?? []),
     widgetPathInsets: mergeWidgetPathInsetsFromStored(config.widgetPathInsets ?? []),

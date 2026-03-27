@@ -94,4 +94,91 @@ export class GroqAgentProvider implements AgentProvider {
 
     return { response: 'Sorry, I had trouble responding. Please try again in a moment.' };
   }
+
+  /**
+   * Streams assistant content chunks (OpenAI-compatible SSE). Falls back to a single error chunk on failure.
+   */
+  async *sendMessageStream({
+    prompt,
+    context,
+  }: {
+    prompt: string;
+    conversationId: string;
+    agentId: string;
+    context?: Record<string, unknown>;
+  }): AsyncGenerator<string, void, undefined> {
+    if (!this.apiKey) {
+      yield 'Groq API key is not configured. Set GROQ_API_KEY.';
+      return;
+    }
+
+    const history = (context?.history as Array<{ role: string; content: string }>) ?? [];
+    const systemPrompt =
+      (context?.systemPrompt as string) ?? 'You are a helpful assistant.';
+    const model = (context?.model as string) ?? DEFAULT_MODEL;
+
+    const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+      { role: 'system', content: systemPrompt },
+      ...history.map((m) => ({
+        role: (m.role === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
+        content: m.content,
+      })),
+      { role: 'user', content: prompt },
+    ];
+
+    const body = JSON.stringify({
+      model,
+      messages,
+      max_tokens: 1024,
+      temperature: 0.7,
+      stream: true,
+    });
+
+    const res = await fetch(GROQ_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${this.apiKey}`,
+      },
+      body,
+    });
+
+    if (!res.ok || !res.body) {
+      const err = await res.text().catch(() => '');
+      console.error(`[Groq] Stream API error ${res.status}:`, err);
+      yield 'Sorry, I had trouble responding. Please try again in a moment.';
+      return;
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let carry = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        carry += decoder.decode(value, { stream: true });
+        const lines = carry.split('\n');
+        carry = lines.pop() ?? '';
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith('data:')) continue;
+          const data = trimmed.slice(5).trim();
+          if (data === '[DONE]') continue;
+          try {
+            const json = JSON.parse(data) as {
+              choices?: Array<{ delta?: { content?: string | null } }>;
+            };
+            const piece = json.choices?.[0]?.delta?.content;
+            if (typeof piece === 'string' && piece.length > 0) yield piece;
+          } catch {
+            /* incomplete JSON line — ignore */
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  }
 }

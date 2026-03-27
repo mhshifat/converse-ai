@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { AgentProviderFactory } from '@/adapters/agent-provider-factory';
+import { GroqAgentProvider } from '@/adapters/groq-agent-provider';
 import { getDefaultAgentForProject } from '../repositories/project-agent-repository';
 import { buildContextForProject } from './agent-context-service';
 import { getEmailSender } from '@/server/delivery/email-sender';
@@ -118,6 +119,35 @@ function buildDataCollectionInstruction(schema: Record<string, unknown>): string
   );
   lines.push('---\n');
   return lines.join('\n');
+}
+
+async function collectStreamedLlmResponse(
+  provider: ReturnType<typeof AgentProviderFactory.getProvider>,
+  opts: {
+    prompt: string;
+    conversationId: string;
+    agentId: string;
+    context: {
+      history: Array<{ role: string; content: string }>;
+      systemPrompt: string;
+      model?: unknown;
+    };
+  },
+  onDelta?: (chunk: string) => void
+): Promise<string> {
+  if (provider instanceof GroqAgentProvider) {
+    let full = '';
+    for await (const chunk of provider.sendMessageStream(opts)) {
+      full += chunk;
+      onDelta?.(chunk);
+    }
+    const trimmed = full.trim();
+    return trimmed || 'I could not generate a response.';
+  }
+  const { response } = await provider.sendMessage(opts);
+  const trimmed = response.trim();
+  if (trimmed) onDelta?.(trimmed);
+  return trimmed || 'I could not generate a response.';
 }
 
 export async function getChatbotByApiKey(apiKey: string) {
@@ -249,8 +279,10 @@ export async function sendFirstMessage(
   customerId: string,
   channel: 'text' | 'call',
   content: string,
-  attachmentUrl?: string
+  options?: { attachmentUrl?: string; onAgentDelta?: (chunk: string) => void }
 ): Promise<SendFirstMessageResult> {
+  const attachmentUrl = options?.attachmentUrl;
+  const onAgentDelta = options?.onAgentDelta;
   const chatbot = await getChatbotByApiKey(apiKey);
   if (!chatbot) return null;
 
@@ -338,16 +370,20 @@ export async function sendFirstMessage(
     (dataCollectionInstruction ? dataCollectionInstruction : '') +
     voiceInstruction +
     handoffInstruction;
-  let { response } = await provider.sendMessage({
-    prompt: content,
-    conversationId,
-    agentId: conversationWithAgent.agent_id,
-    context: {
-      history,
-      systemPrompt: systemPromptWithKnowledge,
-      model: agentSettings.model,
+  let response = await collectStreamedLlmResponse(
+    provider,
+    {
+      prompt: content,
+      conversationId,
+      agentId: conversationWithAgent.agent_id,
+      context: {
+        history,
+        systemPrompt: systemPromptWithKnowledge,
+        model: agentSettings.model,
+      },
     },
-  });
+    onAgentDelta
+  );
 
   let handoffRequested = false;
   if (!aiOnlyMode && response.includes('__HANDOFF__')) {
@@ -396,7 +432,8 @@ export async function sendMessage(
   conversationId: string,
   content: string,
   senderType: 'customer' | 'agent',
-  attachmentUrl?: string
+  attachmentUrl?: string,
+  llmStream?: { onAgentDelta?: (chunk: string) => void }
 ) {
   const conversation = await prisma.conversation.findUnique({
     where: { id: conversationId },
@@ -485,16 +522,20 @@ export async function sendMessage(
       (dataCollectionInstruction ? dataCollectionInstruction : '') +
       voiceInstruction +
       handoffInstruction;
-    let { response } = await provider.sendMessage({
-      prompt: content,
-      conversationId,
-      agentId: conversation.agent_id,
-      context: {
-        history,
-        systemPrompt: systemPromptWithKnowledge,
-        model: agentSettings.model,
+    let response = await collectStreamedLlmResponse(
+      provider,
+      {
+        prompt: content,
+        conversationId,
+        agentId: conversation.agent_id,
+        context: {
+          history,
+          systemPrompt: systemPromptWithKnowledge,
+          model: agentSettings.model,
+        },
       },
-    });
+      llmStream?.onAgentDelta
+    );
 
     let handoffRequested = false;
     if (!aiOnlyMode && response.includes('__HANDOFF__')) {
@@ -879,6 +920,8 @@ async function deliverCompiledData(
 
 // --- Human handoff ---
 
+const HUMAN_TYPING_TTL_MS = 5000;
+
 export async function getConversationMessagesForWidget(conversationId: string) {
   const conversation = await prisma.conversation.findUnique({
     where: { id: conversationId },
@@ -886,6 +929,7 @@ export async function getConversationMessagesForWidget(conversationId: string) {
       status: true,
       handoff_requested_at: true,
       assigned_human_agent_id: true,
+      human_agent_typing_at: true,
       messages: {
         orderBy: { created_at: 'asc' },
         select: { sender_type: true, content: true, payload: true, created_at: true },
@@ -894,11 +938,18 @@ export async function getConversationMessagesForWidget(conversationId: string) {
   });
   if (!conversation) return null;
   const active = conversation.status === 'active';
+  const assigned = active ? conversation.assigned_human_agent_id : null;
+  const typingAt = conversation.human_agent_typing_at;
+  const agentTyping =
+    !!assigned &&
+    typingAt != null &&
+    Date.now() - typingAt.getTime() < HUMAN_TYPING_TTL_MS;
   return {
     status: conversation.status,
     // Closed conversations still store handoff columns; widget must not show "connected to agent".
     handoffRequested: active ? !!conversation.handoff_requested_at : false,
-    assignedHumanAgentId: active ? conversation.assigned_human_agent_id : null,
+    assignedHumanAgentId: assigned,
+    agentTyping,
     messages: conversation.messages.map((m) => ({
       senderType: m.sender_type,
       content: m.content,
@@ -906,6 +957,30 @@ export async function getConversationMessagesForWidget(conversationId: string) {
       createdAt: m.created_at,
     })),
   };
+}
+
+export async function setHumanAgentTyping(
+  conversationId: string,
+  userId: string,
+  tenantId: string,
+  typing: boolean
+): Promise<boolean> {
+  const conversation = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    include: { chatbot: { include: { project: { select: { tenant_id: true } } } } },
+  });
+  if (
+    !conversation ||
+    conversation.chatbot.project.tenant_id !== tenantId ||
+    conversation.status !== 'active' ||
+    conversation.assigned_human_agent_id !== userId
+  )
+    return false;
+  await prisma.conversation.update({
+    where: { id: conversationId },
+    data: { human_agent_typing_at: typing ? new Date() : null },
+  });
+  return true;
 }
 
 export async function requestHumanHandoff(conversationId: string): Promise<boolean> {
@@ -1092,6 +1167,10 @@ export async function sendMessageAsHuman(
       content,
       payload: payload ?? undefined,
     },
+  });
+  await prisma.conversation.update({
+    where: { id: conversationId },
+    data: { human_agent_typing_at: null },
   });
   return { success: true };
 }

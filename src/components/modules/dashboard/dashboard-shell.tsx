@@ -42,6 +42,7 @@ import {
   Bell,
   Reply,
   BarChart3,
+  Settings,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { DashboardBackground } from './dashboard-bg';
@@ -155,6 +156,7 @@ export function DashboardShell({ userEmail, children }: DashboardShellProps) {
         { href: `/projects/${projectId}/agents`, label: 'Agents', icon: Bot },
         { href: `/projects/${projectId}/knowledge`, label: 'Knowledge', icon: BookOpen },
         { href: `/projects/${projectId}/integrations`, label: 'Integrations', icon: Plug },
+        { href: `/projects/${projectId}/settings`, label: 'Settings', icon: Settings },
         { href: `/projects/${projectId}/live-chat`, label: 'Live chat', icon: MessageCircle },
         { href: `/projects/${projectId}/human-agents`, label: 'Human agents', icon: UserCircle },
         { href: `/projects/${projectId}/canned-responses`, label: 'Quick replies', icon: Reply },
@@ -286,6 +288,15 @@ export function DashboardShell({ userEmail, children }: DashboardShellProps) {
                     <Link href={`/projects/${projectId}`} className="flex cursor-pointer items-center gap-2">
                       <Home className="size-4" />
                       Overview
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link
+                      href={`/projects/${projectId}/settings`}
+                      className="flex cursor-pointer items-center gap-2"
+                    >
+                      <Settings className="size-4" />
+                      Project settings
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>

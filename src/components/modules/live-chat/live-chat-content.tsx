@@ -28,13 +28,9 @@ import {
 import {
   MessageSquare,
   User,
-  Send,
-  Loader2,
   XCircle,
   MessageCircle,
   ArrowRightLeft,
-  Mic,
-  Square,
   Phone,
   PhoneOff,
   Info,
@@ -50,6 +46,11 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import {
+  LiveChatMessageRow,
+  type LiveChatMessageBubble,
+} from '@/components/modules/live-chat/live-chat-message-row';
+import { LiveChatComposer } from '@/components/modules/live-chat/live-chat-composer';
 
 function chatbotInitials(name: string) {
   const parts = name.trim().split(/\s+/);
@@ -66,6 +67,10 @@ export function LiveChatContent({ projectId }: LiveChatContentProps = {}) {
   const [listQuery, setListQuery] = useState('');
   const [copiedId, setCopiedId] = useState(false);
   const [input, setInput] = useState('');
+  const selectConversation = useCallback((id: string | null) => {
+    setInput('');
+    setSelectedId(id);
+  }, []);
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
   const [voiceUploading, setVoiceUploading] = useState(false);
   const [liveVoiceJoined, setLiveVoiceJoined] = useState(false);
@@ -110,6 +115,25 @@ export function LiveChatContent({ projectId }: LiveChatContentProps = {}) {
       void utils.liveChat.getConversation.invalidate({ conversationId: selectedId! });
     },
   });
+  const setHumanTypingMutation = trpc.liveChat.setHumanTyping.useMutation();
+  const draftActive = input.trim().length > 0;
+
+  useEffect(() => {
+    if (!selectedId || !isAssigned) return;
+    const cid = selectedId;
+    if (!draftActive) {
+      setHumanTypingMutation.mutate({ conversationId: cid, typing: false });
+      return;
+    }
+    setHumanTypingMutation.mutate({ conversationId: cid, typing: true });
+    const iv = setInterval(() => {
+      setHumanTypingMutation.mutate({ conversationId: cid, typing: true });
+    }, 2000);
+    return () => {
+      clearInterval(iv);
+      setHumanTypingMutation.mutate({ conversationId: cid, typing: false });
+    };
+  }, [selectedId, isAssigned, draftActive]);
 
   const startVoiceRecording = useCallback(async () => {
     if (!selectedId) return;
@@ -264,8 +288,7 @@ export function LiveChatContent({ projectId }: LiveChatContentProps = {}) {
   const endConversationMutation = trpc.liveChat.endConversation.useMutation({
     onSuccess: (_, variables) => {
       if (selectedId === variables.conversationId) {
-        setSelectedId(null);
-        setInput('');
+        selectConversation(null);
       }
       void utils.liveChat.listHandoffConversations.invalidate();
     },
@@ -278,7 +301,7 @@ export function LiveChatContent({ projectId }: LiveChatContentProps = {}) {
   const transferMutation = trpc.liveChat.transferToAgent.useMutation({
     onSuccess: () => {
       void utils.liveChat.listHandoffConversations.invalidate();
-      if (selectedId) setSelectedId(null);
+      if (selectedId) selectConversation(null);
     },
   });
 
@@ -344,10 +367,10 @@ export function LiveChatContent({ projectId }: LiveChatContentProps = {}) {
         </Alert>
       ) : null}
 
-      <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
-        <div className="flex min-h-[min(720px,calc(100vh-13rem))] flex-col xl:flex-row">
+      <div className="flex h-[min(72vh,calc(100svh-10.5rem))] min-h-[360px] max-h-[calc(100svh-6rem)] flex-col overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm xl:h-[min(780px,calc(100svh-9rem))]">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden xl:flex-row">
           {/* Left: inbox + waiting queue */}
-          <aside className="flex max-h-[min(52vh,420px)] w-full shrink-0 flex-col border-b border-border/60 bg-muted/20 xl:max-h-none xl:h-auto xl:max-w-[340px] xl:border-b-0 xl:border-r">
+          <aside className="flex max-h-[42vh] min-h-0 w-full shrink-0 flex-col overflow-hidden border-b border-border/60 bg-muted/20 xl:h-full xl:max-h-full xl:w-[340px] xl:max-w-[340px] xl:shrink-0 xl:border-b-0 xl:border-r">
             <div className="shrink-0 space-y-3 border-b border-border/60 p-4">
               <div className="flex items-center justify-between gap-2">
                 <h2 className="text-sm font-semibold tracking-tight text-foreground">Inbox</h2>
@@ -418,7 +441,7 @@ export function LiveChatContent({ projectId }: LiveChatContentProps = {}) {
                         <li key={c.id}>
                           <button
                             type="button"
-                            onClick={() => setSelectedId(c.id)}
+                            onClick={() => selectConversation(c.id)}
                             className={cn(
                               'w-full rounded-xl border p-3 text-left transition-all',
                               selectedId === c.id
@@ -460,7 +483,7 @@ export function LiveChatContent({ projectId }: LiveChatContentProps = {}) {
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       assignMutation.mutate({ conversationId: c.id });
-                                      setSelectedId(c.id);
+                                      selectConversation(c.id);
                                     }}
                                     disabled={assignMutation.isPending}
                                   >
@@ -473,7 +496,7 @@ export function LiveChatContent({ projectId }: LiveChatContentProps = {}) {
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       endConversationMutation.mutate({ conversationId: c.id });
-                                      if (selectedId === c.id) setSelectedId(null);
+                                      if (selectedId === c.id) selectConversation(null);
                                     }}
                                     disabled={endConversationMutation.isPending}
                                   >
@@ -504,7 +527,7 @@ export function LiveChatContent({ projectId }: LiveChatContentProps = {}) {
                         <li key={c.id}>
                           <button
                             type="button"
-                            onClick={() => setSelectedId(c.id)}
+                            onClick={() => selectConversation(c.id)}
                             className={cn(
                               'flex w-full gap-3 rounded-xl border p-3 text-left transition-all',
                               selectedId === c.id
@@ -531,9 +554,9 @@ export function LiveChatContent({ projectId }: LiveChatContentProps = {}) {
             </div>
           </aside>
 
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background xl:h-full">
         {!selectedId ? (
-          <Empty className="flex flex-1 flex-col justify-center py-12 xl:min-h-0">
+          <Empty className="flex min-h-0 flex-1 flex-col justify-center overflow-y-auto py-12">
             <EmptyHeader>
               <EmptyMedia variant="icon">
                 <MessageSquare className="text-muted-foreground size-12" />
@@ -546,8 +569,8 @@ export function LiveChatContent({ projectId }: LiveChatContentProps = {}) {
             </EmptyHeader>
           </Empty>
         ) : (
-          <>
-            <div className="p-3 border-b border-border/60 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            <div className="shrink-0 border-b border-border/60 p-3 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2 min-w-0">
                 <User className="size-4 text-muted-foreground shrink-0" />
                 <span className="text-sm font-medium truncate">{selected?.chatbotName}</span>
@@ -618,100 +641,43 @@ export function LiveChatContent({ projectId }: LiveChatContentProps = {}) {
                 </div>
               )}
             </div>
-            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overflow-x-hidden overscroll-contain p-4">
               {loadingConv ? (
                 <Skeleton className="h-32 w-full" />
               ) : (
                 conversation?.messages.map((m) => (
-                  <div
+                  <LiveChatMessageRow
                     key={m.id}
-                    className={cn(
-                      'flex gap-2',
-                      m.senderType === 'customer' ? 'justify-end' : 'justify-start'
-                    )}
-                  >
-                    <div
-                      className={cn(
-                        'max-w-[85%] rounded-xl px-4 py-2 text-sm',
-                        m.senderType === 'customer'
-                          ? 'bg-primary text-primary-foreground'
-                          : m.senderType === 'human_agent'
-                            ? 'bg-emerald-100 text-emerald-900 dark:bg-emerald-900/30 dark:text-emerald-200'
-                            : 'bg-muted text-foreground'
-                      )}
-                    >
-                      {m.senderType === 'human_agent' && (
-                        <span className="text-xs font-medium opacity-80 block mb-0.5">You</span>
-                      )}
-                      {m.payload?.type === 'audio' && typeof m.payload?.url === 'string' ? (
-                        <audio controls src={m.payload.url} className="max-w-full h-9 mt-1" />
-                      ) : null}
-                      {m.content}
-                    </div>
-                  </div>
+                    message={{
+                      id: m.id,
+                      senderType: m.senderType,
+                      content: m.content,
+                      payload: m.payload as LiveChatMessageBubble['payload'],
+                    }}
+                  />
                 ))
               )}
             </div>
             {isAssigned && (
-              <div className="p-3 border-t border-border/60 flex flex-col gap-2">
-                {cannedList && cannedList.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {cannedList.map((c) => (
-                      <Button
-                        key={c.id}
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-8 text-xs font-normal"
-                        onClick={() => setInput((prev) => (prev ? `${prev} ${c.content}` : c.content))}
-                      >
-                        {c.shortcut}
-                      </Button>
-                    ))}
-                  </div>
-                )}
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    className="shrink-0"
-                    onClick={isRecordingVoice ? stopVoiceRecordingAndSend : startVoiceRecording}
-                    disabled={voiceUploading || sendMutation.isPending}
-                    title={isRecordingVoice ? 'Stop and send voice message' : 'Record voice message'}
-                    aria-label={isRecordingVoice ? 'Stop recording' : 'Record voice'}
-                  >
-                    {voiceUploading ? (
-                      <Loader2 className="size-4 animate-spin" />
-                    ) : isRecordingVoice ? (
-                      <Square className="size-4 text-destructive fill-destructive" />
-                    ) : (
-                      <Mic className="size-4" />
-                    )}
-                  </Button>
-                  <Input
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    placeholder="Type a reply or record voice..."
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        if (input.trim()) {
-                          sendMutation.mutate({ conversationId: selectedId, content: input.trim() });
-                        }
-                      }
-                    }}
-                  />
-                  <Button
-                    onClick={() => {
-                      if (input.trim())
-                        sendMutation.mutate({ conversationId: selectedId, content: input.trim() });
-                    }}
-                    disabled={!input.trim() || sendMutation.isPending}
-                  >
-                    {sendMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-                  </Button>
-                </div>
+              <div className="flex shrink-0 flex-col gap-2 border-t border-border/60 p-3">
+                <LiveChatComposer
+                  value={input}
+                  onChange={setInput}
+                  onSend={() => {
+                    if (!selectedId || !input.trim()) return;
+                    sendMutation.mutate({ conversationId: selectedId, content: input.trim() });
+                  }}
+                  placeholder="Type a reply or record voice…"
+                  disabled={sendMutation.isPending}
+                  sending={sendMutation.isPending}
+                  cannedList={cannedList ?? undefined}
+                  onCannedPick={(content) => setInput((prev) => (prev ? `${prev} ${content}` : content))}
+                  isRecordingVoice={isRecordingVoice}
+                  voiceUploading={voiceUploading}
+                  onVoiceToggle={() =>
+                    isRecordingVoice ? void stopVoiceRecordingAndSend() : void startVoiceRecording()
+                  }
+                />
                 <Button
                   size="sm"
                   variant="ghost"
@@ -719,17 +685,17 @@ export function LiveChatContent({ projectId }: LiveChatContentProps = {}) {
                   onClick={() => endConversationMutation.mutate({ conversationId: selectedId })}
                   disabled={endConversationMutation.isPending}
                 >
-                  <XCircle className="size-3.5 mr-1" />
+                  <XCircle className="mr-1 size-3.5" />
                   Close conversation
                 </Button>
               </div>
             )}
-          </>
+          </div>
         )}
           </div>
 
           {selectedId && selected ? (
-            <aside className="flex min-h-0 w-full shrink-0 flex-col border-t border-border/60 bg-muted/15 xl:max-w-[320px] xl:border-l xl:border-t-0">
+            <aside className="flex max-h-[38vh] min-h-0 w-full shrink-0 flex-col overflow-hidden border-t border-border/60 bg-muted/15 xl:h-full xl:max-h-full xl:w-[320px] xl:max-w-[320px] xl:shrink-0 xl:border-l xl:border-t-0">
               <div className="shrink-0 border-b border-border/60 p-4">
                 <div className="flex items-start gap-3">
                   <div className="flex size-14 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-violet-500 to-fuchsia-600 text-lg font-bold text-white shadow-md">
@@ -758,7 +724,7 @@ export function LiveChatContent({ projectId }: LiveChatContentProps = {}) {
                   </div>
                 </div>
               </div>
-              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden overscroll-contain p-4">
                 {loadingConv || !conversation ? (
                   <Skeleton className="h-40 w-full rounded-lg" />
                 ) : (

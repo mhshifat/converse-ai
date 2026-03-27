@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
+import Link from 'next/link';
 import { trpc } from '@/utils/trpc';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -172,6 +173,13 @@ export function ProjectSettingsTab({
 
   return (
     <div className="space-y-6">
+      <p className="text-sm text-muted-foreground">
+        Project title, icon, logo, and deletion are on the{' '}
+        <Link href={`/projects/${projectId}/settings`} className="font-medium text-primary underline-offset-4 hover:underline">
+          Project settings
+        </Link>{' '}
+        page.
+      </p>
       {serverError && (
         <Alert variant="destructive">
           <AlertTitle>Error</AlertTitle>

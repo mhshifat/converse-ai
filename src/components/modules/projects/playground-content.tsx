@@ -124,7 +124,7 @@ export function PlaygroundContent({ projectId }: PlaygroundContentProps) {
         customerId={customerId}
         onConversationInfo={handleConversationInfo}
         onConversationEnd={handleConversationEnd}
-        inactivityMinutes={2}
+        inactivityMinutes={config.inactivityMinutes ?? 2}
       />
 
       {/* Transcript + compiled data — scroll target when conversation ends */}

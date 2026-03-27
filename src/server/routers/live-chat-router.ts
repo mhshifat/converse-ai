@@ -67,6 +67,23 @@ export const liveChatRouter = router({
       });
     }),
 
+  setHumanTyping: protectedProcedure
+    .input(z.object({ conversationId: z.string().uuid(), typing: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      return withCorrelationError('liveChat.setHumanTyping', async (correlationId) => {
+        const isHuman = await humanAgentRepo.isHumanAgent(ctx.user.id, ctx.user.tenantId);
+        if (!isHuman) throw new Error('You are not a human agent');
+        const ok = await conversationService.setHumanAgentTyping(
+          input.conversationId,
+          ctx.user.id,
+          ctx.user.tenantId,
+          input.typing
+        );
+        if (!ok) throwNotFoundWithId(correlationId, 'Conversation not found or not assigned to you');
+        return { success: true };
+      });
+    }),
+
   getConversation: protectedProcedure
     .input(z.object({ conversationId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
