@@ -99,7 +99,7 @@ export interface ChatbotWidgetConfig {
    * URL path prefixes where the embed must not load (e.g. `/checkout`, `/cart`).
    * Matched against `location.pathname` (normalized with a leading `/`).
    * Supports: plain prefix `/docs` (hides `/docs` and `/docs/...`); dynamic segments `/report/:id`
-   * (same as `/report/*`); `*` one path segment; `**` multiple segments (e.g. `/app/**/settings`).
+   * (same as `/report/*`); `*` one path segment; `**` for multi-segment globs (see dashboard help for examples).
    */
   embedHiddenPaths: string[];
   /**
