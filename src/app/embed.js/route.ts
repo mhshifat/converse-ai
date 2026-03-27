@@ -884,17 +884,17 @@ const EMBED_SCRIPT = `
   }
   function caiSafeMarkdownHref(url) {
     var u = String(url).trim();
-    if (!/^https?:\/\//i.test(u)) return '';
+    if (!/^https?:\\/\\//i.test(u)) return '';
     return caiEscapeHtml(u);
   }
   function caiInlineMarkdownToSafeHtml(line) {
     var s = caiEscapeHtml(line);
-    s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    s = s.replace(/\\*\\*([^*]+)\\*\\*/g, '<strong>$1</strong>');
     s = s.replace(
       new RegExp('\\x60([^\\x60]+)\\x60', 'g'),
       '<code style="font-size:0.92em;padding:0.12em 0.35em;border-radius:4px;background:rgba(0,0,0,0.07)">$1</code>'
     );
-    s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, function (_, label, url) {
+    s = s.replace(/\\[([^\\]]+)\\]\\(([^)\\s]+)\\)/g, function (_, label, url) {
       var h = caiSafeMarkdownHref(url);
       if (!h) return label;
       return (
@@ -914,17 +914,17 @@ const EMBED_SCRIPT = `
       container.textContent = '';
       return;
     }
-    var blocks = text.split(/\n\s*\n/);
+    var blocks = text.split(/\\n\\s*\\n/);
     for (var bi = 0; bi < blocks.length; bi++) {
-      var block = blocks[bi].replace(/^\n+|\n+$/g, '').trim();
+      var block = blocks[bi].replace(/^\\n+|\\n+$/g, '').trim();
       if (!block) continue;
-      var lines = block.split('\n');
+      var lines = block.split('\\n');
       var listItems = [];
       var isList = true;
       for (var li = 0; li < lines.length; li++) {
         var ln = lines[li];
         if (ln.trim() === '') continue;
-        var mm = /^\s*[-*]\s+(.*)$/.exec(ln);
+        var mm = /^\\s*[-*]\\s+(.*)$/.exec(ln);
         if (!mm) {
           isList = false;
           break;
@@ -944,7 +944,7 @@ const EMBED_SCRIPT = `
       } else {
         var div = document.createElement('div');
         div.style.cssText = 'margin:0 0 10px 0;line-height:1.45;';
-        var bodyLines = block.split('\n');
+        var bodyLines = block.split('\\n');
         div.innerHTML = bodyLines.map(function (ln) {
           return caiInlineMarkdownToSafeHtml(ln);
         }).join('<br>');
