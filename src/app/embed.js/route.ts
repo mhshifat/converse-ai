@@ -31,6 +31,24 @@ const EMBED_SCRIPT = `
       body: JSON.stringify({ json: input })
     }).then(function(r) { return r.json(); });
   }
+  /** Unwrap tRPC v11 + superjson body (single result or batch array). */
+  function trpcUnwrap(res) {
+    if (res == null) return { error: 'Network error', data: null };
+    var body = Array.isArray(res) && res.length ? res[0] : res;
+    if (body && body.error) {
+      var e = body.error;
+      var msg = 'Something went wrong';
+      if (e && typeof e === 'object') {
+        if (e.json && e.json.message) msg = String(e.json.message);
+        else if (e.message) msg = String(e.message);
+      }
+      return { error: msg, data: null };
+    }
+    if (!body || !body.result || !body.result.data) return { error: null, data: null };
+    var d = body.result.data;
+    var data = d && typeof d === 'object' && Object.prototype.hasOwnProperty.call(d, 'json') ? d.json : d;
+    return { error: null, data: data };
+  }
   var voiceCurrentAudio = null;
   var voicePlayingAgentAudio = false;
   function stopVoiceAgentOutput() {
@@ -56,7 +74,8 @@ const EMBED_SCRIPT = `
   }
   function playAgentSpeech(text) {
     trpcMutate('widget.synthesizeSpeech', { apiKey: apiKey, text: text }).then(function(res) {
-      var data = res && res.result && res.result.data && res.result.data.json;
+      var u = trpcUnwrap(res);
+      var data = u.data;
       if (!data || !data.audioBase64) { browserTtsFallback(text); if (typeof refreshVoiceFooterLabel === 'function') refreshVoiceFooterLabel(); return; }
       try {
         var binary = atob(data.audioBase64);
@@ -271,7 +290,8 @@ const EMBED_SCRIPT = `
     pollIntervalId = setInterval(function() {
       if (!conversationId) return;
       trpcQuery('widget.getMessages', { conversationId: conversationId }).then(function(res) {
-        var data = res && res.result && res.result.data && res.result.data.json;
+        var u = trpcUnwrap(res);
+        var data = u.data;
         if (!data || !data.messages) return;
         handoffMode = data.handoffRequested || !!data.assignedHumanAgentId;
         assignedHumanAgentId = data.assignedHumanAgentId || null;
@@ -765,10 +785,26 @@ const EMBED_SCRIPT = `
     }
 
     function applyWidgetSendResult(result, sendMessageCid) {
-      if (!result) return;
-      if (result.response) {
-        appendMsg('agent', result.response);
-        if (voiceEnabled && mode === 'voice') playAgentSpeech(result.response);
+      if (!result) {
+        appendMsg('agent', 'Something went wrong. Please try again.');
+        return;
+      }
+      var reply = result.response;
+      var hasReply = typeof reply === 'string' ? reply.trim().length > 0 : !!reply;
+      if (hasReply) {
+        var replyText = typeof reply === 'string' ? reply.trim() : reply;
+        appendMsg('agent', replyText);
+        if (voiceEnabled && mode === 'voice') playAgentSpeech(replyText);
+      } else if (result.handoffRequested) {
+        appendMsg(
+          'agent',
+          'Thanks — we are connecting you with a team member. Someone will reply here shortly.'
+        );
+      } else {
+        appendMsg(
+          'agent',
+          'Thanks for your message. A team member will reply here shortly.'
+        );
       }
       if (result.handoffRequested) {
         handoffMode = true;
@@ -797,11 +833,20 @@ const EMBED_SCRIPT = `
         trpcMutate('widget.sendMessage', { conversationId: conversationId, content: text, attachmentUrl: attachmentUrl || undefined }).then(function (res) {
           voiceSendPending = false;
           if (voiceEnabled && mode === 'voice' && typeof refreshVoiceFooterLabel === 'function') refreshVoiceFooterLabel();
-          var result = res && res.result && res.result.data && res.result.data.json;
-          applyWidgetSendResult(result, cidSend);
+          var u = trpcUnwrap(res);
+          if (u.error) {
+            appendMsg('agent', u.error);
+            return;
+          }
+          if (u.data == null) {
+            appendMsg('agent', 'Could not load a reply. Please try again.');
+            return;
+          }
+          applyWidgetSendResult(u.data, cidSend);
         }).catch(function () {
           voiceSendPending = false;
           if (voiceEnabled && mode === 'voice' && typeof refreshVoiceFooterLabel === 'function') refreshVoiceFooterLabel();
+          appendMsg('agent', 'Could not reach the chat service. Check your connection and try again.');
         });
       } else {
         trpcMutate('widget.sendFirstMessage', {
@@ -813,7 +858,12 @@ const EMBED_SCRIPT = `
         }).then(function (res) {
           voiceSendPending = false;
           if (voiceEnabled && mode === 'voice' && typeof refreshVoiceFooterLabel === 'function') refreshVoiceFooterLabel();
-          var result = res && res.result && res.result.data && res.result.data.json;
+          var u = trpcUnwrap(res);
+          if (u.error) {
+            appendMsg('agent', u.error);
+            return;
+          }
+          var result = u.data;
           if (result && result.unavailable) {
             appendMsg('agent', result.message || 'We are unable to take your message at the moment. Please try again later.');
             return;
@@ -825,10 +875,15 @@ const EMBED_SCRIPT = `
             ratingSubmitted = false;
             removeEndedFlow();
           }
+          if (result == null) {
+            appendMsg('agent', 'Could not start the conversation. Please try again.');
+            return;
+          }
           applyWidgetSendResult(result, null);
         }).catch(function () {
           voiceSendPending = false;
           if (voiceEnabled && mode === 'voice' && typeof refreshVoiceFooterLabel === 'function') refreshVoiceFooterLabel();
+          appendMsg('agent', 'Could not reach the chat service. Check your connection and try again.');
         });
       }
     }
@@ -861,7 +916,8 @@ const EMBED_SCRIPT = `
         .then(function (res) {
           voiceTranscribePending = false;
           if (typeof refreshVoiceFooterLabel === 'function') refreshVoiceFooterLabel();
-          var data = res && res.result && res.result.data && res.result.data.json;
+          var u = trpcUnwrap(res);
+          var data = u.data;
           var text = (data && data.text ? String(data.text) : '').trim() || '(no speech detected)';
           appendMsg('customer', text);
           sendCustomerText(text, undefined, 'call');
@@ -1267,7 +1323,8 @@ const EMBED_SCRIPT = `
     }
     if (conversationId) {
       trpcQuery('widget.getMessages', { conversationId: conversationId }).then(function(res) {
-        var data = res && res.result && res.result.data && res.result.data.json;
+        var u = trpcUnwrap(res);
+        var data = u.data;
         if (data && (data.handoffRequested || data.assignedHumanAgentId)) {
           handoffMode = true;
           assignedHumanAgentId = data.assignedHumanAgentId || null;
@@ -1308,8 +1365,9 @@ const EMBED_SCRIPT = `
     thanksEl.textContent = 'Thanks for your feedback.';
     function handleRatingOk(res) {
       ratingPending = false;
-      if (res && res.error) return;
-      var result = res && res.result && res.result.data && res.result.data.json;
+      var u = trpcUnwrap(res);
+      if (u.error) return;
+      var result = u.data;
       if (!result || result.success !== true) return;
       ratingSubmitted = true;
       ratingBox.style.display = 'none';
@@ -1411,15 +1469,22 @@ const EMBED_SCRIPT = `
     if (sender === 'human_agent') sender = 'agent';
     var row = document.createElement('div');
     row.className = isUser ? 'cai-msg-user' : 'cai-msg-agent';
-    row.style.cssText = 'display:flex;align-items:flex-end;gap:8px;' + (isUser ? 'flex-direction:row-reverse;align-self:flex-end;' : 'align-self:flex-start;');
+    row.style.cssText =
+      'display:flex;align-items:flex-end;gap:8px;' +
+      (isUser ? 'flex-direction:row;justify-content:flex-end;align-self:flex-end;' : 'flex-direction:row;align-self:flex-start;');
     var bubble = document.createElement('div');
     bubble.style.cssText = 'max-width:85%;padding:10px 14px;border-radius:' + (m.bubbleBorderRadius || 12) + 'px;font-size:' + (m.fontSize || 14) + 'px;background:' + (isUser ? (m.userBubbleBackground || config.primaryColor) : (m.agentBubbleBackground || '#f0f0f0')) + ';color:' + (isUser ? (m.userBubbleTextColor || '#fff') : (m.agentBubbleTextColor || '#111')) + ';box-shadow:0 1px 3px rgba(0,0,0,.08);';
     bubble.textContent = content;
     var avatar = document.createElement('div');
     avatar.style.cssText = 'width:28px;height:28px;flex-shrink:0;border-radius:50%;display:flex;align-items:center;justify-content:center;background:' + (isUser ? (m.userBubbleBackground || config.primaryColor) : (m.agentBubbleBackground || '#f0f0f0')) + ';color:' + (isUser ? (m.userBubbleTextColor || '#fff') : (m.agentBubbleTextColor || '#111')) + ';border:2px solid ' + (isUser ? (m.userBubbleBackground || config.primaryColor) : (m.agentBubbleBackground || '#f0f0f0')) + ';box-sizing:border-box;';
     avatar.appendChild(caiSvg(isUser ? CAI.user : CAI.bot, 14));
-    row.appendChild(bubble);
-    row.appendChild(avatar);
+    if (isUser) {
+      row.appendChild(bubble);
+      row.appendChild(avatar);
+    } else {
+      row.appendChild(avatar);
+      row.appendChild(bubble);
+    }
     row.dataset.msg = '1';
     if (endedFlowEl && endedFlowEl.parentNode === listEl) listEl.insertBefore(row, endedFlowEl);
     else listEl.appendChild(row);
@@ -1427,7 +1492,8 @@ const EMBED_SCRIPT = `
   }
 
   trpcQuery('widget.getConfig', { apiKey: apiKey }).then(function(res) {
-    var data = res && res.result && res.result.data && res.result.data.json;
+    var u = trpcUnwrap(res);
+    var data = u.data;
     if (data) {
       if (data.name) config.name = data.name;
       if (data.config) {
