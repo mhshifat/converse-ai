@@ -3,6 +3,7 @@ import { getIronSession } from 'iron-session';
 import { cookies } from 'next/headers';
 import { sessionOptions, type SessionData } from '@/lib/session';
 import { getGoogleCallbackUrl } from '@/lib/auth-callback';
+import { buildLoginRedirectForOAuthCallbackFailure } from '@/lib/auth/oauth-callback-failure';
 import { prisma } from '@/lib/prisma';
 import { nanoid } from 'nanoid';
 
@@ -124,7 +125,12 @@ export async function GET(request: NextRequest) {
     });
     return res;
   } catch (e) {
-    const message = e instanceof Error ? e.message : 'Google sign-in failed';
-    return NextResponse.redirect(getLoginUrl() + '?error=' + encodeURIComponent(message));
+    const url = buildLoginRedirectForOAuthCallbackFailure(
+      getLoginUrl(),
+      e,
+      'auth.google.callback',
+      'google'
+    );
+    return NextResponse.redirect(url);
   }
 }

@@ -29,6 +29,102 @@ type FormData = z.infer<typeof schema>;
 
 export type LastAuthProvider = 'google' | 'github';
 
+const OAUTH_MANAGED_ERROR_CODES = new Set([
+  'no_email',
+  'missing_code',
+  'oauth_failed',
+  'oauth_not_configured',
+  'access_denied',
+]);
+
+function isLikelyTechnicalErrorLeak(text: string): boolean {
+  const lower = text.toLowerCase();
+  return (
+    lower.includes('prisma') ||
+    lower.includes('turbopack') ||
+    lower.includes('invalid `') ||
+    lower.includes('__turbopack__') ||
+    text.includes('\n') ||
+    text.length > 200
+  );
+}
+
+function normalizeOauthCorrelationId(raw: string | null): string | null {
+  if (!raw || !/^[0-9a-f-]{36}$/i.test(raw)) return null;
+  return raw;
+}
+
+function getOauthLoginAlertContent(
+  rawCode: string,
+  providerParam: string | null,
+  correlationFromUrl: string | null
+): { message: string; correlationId: string | null } {
+  const correlationId = normalizeOauthCorrelationId(correlationFromUrl);
+
+  if (OAUTH_MANAGED_ERROR_CODES.has(rawCode)) {
+    switch (rawCode) {
+      case 'no_email':
+        return {
+          message:
+            'We could not get your email from the provider. Try another method or sign up with email.',
+          correlationId,
+        };
+      case 'missing_code':
+        return {
+          message: 'Sign-in was cancelled or the link was invalid.',
+          correlationId,
+        };
+      case 'oauth_not_configured': {
+        const label =
+          providerParam === 'github'
+            ? 'GitHub'
+            : providerParam === 'google'
+              ? 'Google'
+              : 'This sign-in method';
+        return {
+          message: `${label} is not configured on this server. Try email sign-in or contact support.`,
+          correlationId,
+        };
+      }
+      case 'oauth_failed':
+        return {
+          message:
+            'Something went wrong while signing in. Try again, or contact support with the correlation ID below.',
+          correlationId,
+        };
+      case 'access_denied':
+        return { message: 'Sign-in was cancelled.', correlationId: null };
+      default:
+        return {
+          message:
+            'Something went wrong while signing in. Try again, or contact support if the problem continues.',
+          correlationId,
+        };
+    }
+  }
+
+  if (isLikelyTechnicalErrorLeak(rawCode)) {
+    return {
+      message:
+        'Something went wrong while signing in. Try again, or contact support if the problem continues.',
+      correlationId: null,
+    };
+  }
+
+  if (/^[a-z0-9_-]{1,48}$/i.test(rawCode)) {
+    return {
+      message: `Sign-in could not complete. Try again or use another method.`,
+      correlationId: null,
+    };
+  }
+
+  return {
+    message:
+      'Something went wrong while signing in. Try again, or contact support if the problem continues.',
+    correlationId: null,
+  };
+}
+
 interface LoginFormProps {
   lastAuthProvider?: LastAuthProvider;
 }
@@ -40,8 +136,14 @@ export function LoginForm({ lastAuthProvider }: LoginFormProps = {}) {
   const verifiedSuccess = searchParams.get('verified') === 'success';
   const verifyError = searchParams.get('error');
   const rawError = searchParams.get('error');
+  const oauthProviderParam = searchParams.get('provider');
+  const oauthCorrelationFromUrl = searchParams.get('correlation_id');
   const isVerificationError = rawError && ['missing_token', 'invalid', 'verification_failed'].includes(rawError);
-  const oauthError = rawError && !verificationSent && !verifiedSuccess && !isVerificationError ? rawError : null;
+  const oauthErrorCode =
+    rawError && !verificationSent && !verifiedSuccess && !isVerificationError ? rawError : null;
+  const oauthAlert = oauthErrorCode
+    ? getOauthLoginAlertContent(oauthErrorCode, oauthProviderParam, oauthCorrelationFromUrl)
+    : null;
 
   const [serverError, setServerError] = React.useState<string | null>(null);
   const [correlationId, setCorrelationId] = React.useState<string | null>(null);
@@ -163,15 +265,56 @@ export function LoginForm({ lastAuthProvider }: LoginFormProps = {}) {
               </AlertDescription>
             </Alert>
           )}
-          {oauthError && (
+          {oauthAlert && (
             <Alert variant="destructive" className="animate-in fade-in-0">
               <AlertTitle>Sign-in issue</AlertTitle>
-              <AlertDescription>
-                {oauthError === 'no_email'
-                  ? 'We could not get your email from the provider. Try another method or sign up with email.'
-                  : oauthError === 'missing_code'
-                    ? 'Sign-in was cancelled or the link was invalid.'
-                    : decodeURIComponent(oauthError)}
+              <AlertDescription className="space-y-2">
+                <p>{oauthAlert.message}</p>
+                <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-destructive/20">
+                  {oauthAlert.correlationId ? (
+                    <>
+                      <span className="text-xs text-muted-foreground">
+                        Correlation ID (share with support):
+                      </span>
+                      <code
+                        className="text-xs px-1.5 py-0.5 rounded bg-destructive/20 font-mono break-all"
+                        title="Copy and send this ID to support so they can trace the sign-in attempt."
+                      >
+                        {oauthAlert.correlationId}
+                      </code>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs shrink-0"
+                        onClick={() => void navigator.clipboard.writeText(oauthAlert.correlationId ?? '')}
+                        title="Copy correlation ID to share with customer support"
+                      >
+                        Copy ID
+                      </Button>
+                    </>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      If you contact support, describe what you were doing and which sign-in method you used.
+                    </p>
+                  )}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs shrink-0"
+                    onClick={() =>
+                      void navigator.clipboard.writeText(
+                        oauthAlert.correlationId
+                          ? `Error: ${oauthAlert.message}\nCorrelation ID: ${oauthAlert.correlationId}`
+                          : `Error: ${oauthAlert.message}`
+                      )
+                    }
+                    title="Copy error summary for support"
+                  >
+                    Copy details
+                  </Button>
+                </div>
               </AlertDescription>
             </Alert>
           )}
