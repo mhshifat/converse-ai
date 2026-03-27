@@ -25,4 +25,5 @@ const handler = async (req: Request) => {
   return new Response(res.body, { status: res.status, headers });
 };
 
-export { handler as GET, handler as POST };
+/** OPTIONS must be exported or Next.js returns 405 — cross-origin POST (embed) preflight never reaches CORS headers inside `handler`. */
+export { handler as GET, handler as POST, handler as OPTIONS };

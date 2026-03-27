@@ -217,6 +217,8 @@ const EMBED_SCRIPT = `
     showPoweredBy: true,
     attachmentsEnabled: false,
     embedHiddenPaths: [],
+    embedHiddenSubdomains: [],
+    widgetPathInsets: [],
     defaultRatingType: 'thumbs',
     proactiveWelcomeEnabled: false,
     proactiveWelcomeDelaySeconds: 0,
@@ -502,10 +504,183 @@ const EMBED_SCRIPT = `
     if (n > 400) n = 400;
     return n;
   }
+  var caiEffectiveInsets = {
+    widgetInsetTopPx: 0,
+    widgetInsetRightPx: 0,
+    widgetInsetBottomPx: 0,
+    widgetInsetLeftPx: 0,
+  };
+  var caiPathPollTimer = null;
+  var caiLastPathForInsets = '';
+  var caiPathRoutingBound = false;
+  function caiRefreshEffectiveWidgetInsets() {
+    var keys = ['widgetInsetTopPx', 'widgetInsetRightPx', 'widgetInsetBottomPx', 'widgetInsetLeftPx'];
+    for (var ei = 0; ei < keys.length; ei++) {
+      var ek = keys[ei];
+      caiEffectiveInsets[ek] = caiClampOffsetPx(config[ek]);
+    }
+    var rules = config.widgetPathInsets;
+    if (!rules || !rules.length) return;
+    var path = '/';
+    try {
+      path = window.location && window.location.pathname ? window.location.pathname : '/';
+    } catch (ePath2) {}
+    var best = null;
+    var bestLen = -1;
+      for (var ri = 0; ri < rules.length; ri++) {
+      var rule = rules[ri];
+      if (!rule || typeof rule.pathPrefix !== 'string') continue;
+      var pfx = rule.pathPrefix;
+      if (caiPathMatchesEmbedHiddenPattern(path, pfx)) {
+        if (pfx.length > bestLen) {
+          best = rule;
+          bestLen = pfx.length;
+        }
+      }
+    }
+    if (!best) return;
+    for (var oi = 0; oi < keys.length; oi++) {
+      var ok = keys[oi];
+      if (best[ok] != null && best[ok] !== '') {
+        caiEffectiveInsets[ok] = caiClampOffsetPx(best[ok]);
+      }
+    }
+  }
   function caiWidgetInset(key) {
-    return caiClampOffsetPx(config[key]);
+    return caiEffectiveInsets[key];
+  }
+  function caiSyncChromeLayoutFromInsets() {
+    if (!root) return;
+    var pos = config.position || 'bottom-right';
+    var b = config.bubble || {};
+    if (!containerId) {
+      var rpad = 24;
+      var rootStyle = 'position:fixed;z-index:999999;';
+      if (pos.indexOf('bottom') !== -1) rootStyle += 'bottom:' + (rpad + caiWidgetInset('widgetInsetBottomPx')) + 'px;';
+      else rootStyle += 'top:' + (rpad + caiWidgetInset('widgetInsetTopPx')) + 'px;';
+      if (pos.indexOf('right') !== -1) rootStyle += 'right:' + (rpad + caiWidgetInset('widgetInsetRightPx')) + 'px;';
+      else rootStyle += 'left:' + (rpad + caiWidgetInset('widgetInsetLeftPx')) + 'px;';
+      root.style.cssText = rootStyle;
+    } else if (!openPanelOnLoad) {
+      var bpad = 16;
+      var btnEl = root.querySelector('button[aria-label="Open chat"]');
+      if (btnEl) {
+        var bubbleBottom = pos.indexOf('bottom') !== -1 ? bpad + caiWidgetInset('widgetInsetBottomPx') + 'px' : 'auto';
+        var bubbleTop = pos.indexOf('top') !== -1 ? bpad + caiWidgetInset('widgetInsetTopPx') + 'px' : 'auto';
+        var bubbleRight = pos.indexOf('right') !== -1 ? bpad + caiWidgetInset('widgetInsetRightPx') + 'px' : 'auto';
+        var bubbleLeft = pos.indexOf('left') !== -1 ? bpad + caiWidgetInset('widgetInsetLeftPx') + 'px' : 'auto';
+        btnEl.style.bottom = bubbleBottom;
+        btnEl.style.top = bubbleTop;
+        btnEl.style.right = bubbleRight;
+        btnEl.style.left = bubbleLeft;
+      }
+    }
+    if (panel && panel.parentNode && !(containerId && openPanelOnLoad)) {
+      var pcfg = config.popup || {};
+      var ppos = config.position || 'bottom-right';
+      var pbsz = config.bubble && config.bubble.size ? config.bubble.size + 12 : 68;
+      var panelInsetStack = !!containerId;
+      var pyBottom = pbsz + (panelInsetStack ? caiWidgetInset('widgetInsetBottomPx') : 0);
+      var pyTop = pbsz + (panelInsetStack ? caiWidgetInset('widgetInsetTopPx') : 0);
+      var pxRight = panelInsetStack ? caiWidgetInset('widgetInsetRightPx') : 0;
+      var pxLeft = panelInsetStack ? caiWidgetInset('widgetInsetLeftPx') : 0;
+      panel.style.bottom = ppos.indexOf('bottom') !== -1 ? pyBottom + 'px' : 'auto';
+      panel.style.top = ppos.indexOf('top') !== -1 ? pyTop + 'px' : 'auto';
+      panel.style.right = ppos.indexOf('right') !== -1 ? pxRight + 'px' : 'auto';
+      panel.style.left = ppos.indexOf('left') !== -1 ? pxLeft + 'px' : 'auto';
+    }
+  }
+  function caiOnWidgetPathMaybeChanged() {
+    var path = '/';
+    try {
+      path = window.location && window.location.pathname ? window.location.pathname : '/';
+    } catch (eCh) {}
+    if (path === caiLastPathForInsets) return;
+    caiLastPathForInsets = path;
+    caiRefreshEffectiveWidgetInsets();
+    caiSyncChromeLayoutFromInsets();
+  }
+  function caiStartWidgetPathInsetWatch() {
+    if (caiPathPollTimer) {
+      clearInterval(caiPathPollTimer);
+      caiPathPollTimer = null;
+    }
+    try {
+      caiLastPathForInsets = window.location && window.location.pathname ? window.location.pathname : '/';
+    } catch (eInit) {
+      caiLastPathForInsets = '/';
+    }
+    if (!config.widgetPathInsets || !config.widgetPathInsets.length) return;
+    if (!caiPathRoutingBound) {
+      window.addEventListener('popstate', caiOnWidgetPathMaybeChanged);
+      caiPathRoutingBound = true;
+    }
+    caiPathPollTimer = setInterval(caiOnWidgetPathMaybeChanged, 900);
+  }
+  function caiNormalizeWidgetPathInsetsFromServer(arr) {
+    var out = [];
+    if (!arr || !arr.length) return out;
+    var maxN = 30;
+    var insetKeys = ['widgetInsetTopPx', 'widgetInsetRightPx', 'widgetInsetBottomPx', 'widgetInsetLeftPx'];
+    for (var wi = 0; wi < arr.length && out.length < maxN; wi++) {
+      var row = arr[wi];
+      if (!row || typeof row !== 'object') continue;
+      var ps = typeof row.pathPrefix === 'string' ? row.pathPrefix.trim() : '';
+      if (!ps) continue;
+      var hp = ps.replace(/\\s+/g, '');
+      if (!hp) continue;
+      if (hp.charAt(0) !== '/') hp = '/' + hp.replace(/^\\/+/,'');
+      hp = hp.replace(/\\/+$/, '') || '/';
+      hp = caiExpandEmbedPathDynamicSegments(hp);
+      if (hp.length > 512) hp = hp.slice(0, 512);
+      var obj = { pathPrefix: hp };
+      var hasAny = false;
+      for (var ki = 0; ki < insetKeys.length; ki++) {
+        var ikk = insetKeys[ki];
+        if (row[ikk] != null && row[ikk] !== '') {
+          obj[ikk] = caiClampOffsetPx(row[ikk]);
+          hasAny = true;
+        }
+      }
+      if (hasAny) out.push(obj);
+    }
+    return out;
   }
 
+  function caiEscapeRegexPathChars(s) {
+    return String(s).replace(/[\\^$+?.()|[\\]{}]/g, '\\$&');
+  }
+  function caiExpandEmbedPathDynamicSegments(str) {
+    return String(str).replace(/\/:[A-Za-z][A-Za-z0-9_]*(?=\/|$)/g, '/*');
+  }
+  function caiPathMatchesEmbedHiddenPattern(pathname, pattern) {
+    var path = pathname || '/';
+    var p = pattern;
+    if (!p || typeof p !== 'string') return false;
+    if (p.indexOf('*') === -1) {
+      if (path === p) return true;
+      if (p !== '/' && path.indexOf(p + '/') === 0) return true;
+      return false;
+    }
+    if (p.length >= 3 && p.slice(-3) === '/**') {
+      var pref = p.slice(0, -3);
+      if (pref.indexOf('*') === -1) {
+        return new RegExp('^' + caiEscapeRegexPathChars(pref) + '(?:/.*)?$').test(path);
+      }
+    }
+    var chunks = p.split('**');
+    var body = '';
+    for (var ci = 0; ci < chunks.length; ci++) {
+      if (ci > 0) body += '.*';
+      var chunk = chunks[ci];
+      var bits = chunk.split('*');
+      for (var cj = 0; cj < bits.length; cj++) {
+        if (cj > 0) body += '[^/]+';
+        body += caiEscapeRegexPathChars(bits[cj]);
+      }
+    }
+    return new RegExp('^' + body + '$').test(path);
+  }
   function caiNormalizeEmbedHiddenPathsFromServer(arr) {
     var out = [];
     if (!arr || !arr.length) return out;
@@ -520,24 +695,76 @@ const EMBED_SCRIPT = `
       if (!hp) continue;
       if (hp.charAt(0) !== '/') hp = '/' + hp.replace(/^\\/+/,'');
       hp = hp.replace(/\\/+$/, '') || '/';
+      hp = caiExpandEmbedPathDynamicSegments(hp);
       if (hp.length > maxLen) hp = hp.slice(0, maxLen);
       out.push(hp);
     }
     return out;
   }
 
-  function caiShouldHideEmbedForPath() {
+  function caiHostnameMatchesHiddenEntry(hostname, entry) {
+    var h = String(hostname || '')
+      .trim()
+      .toLowerCase();
+    var e = String(entry || '')
+      .trim()
+      .toLowerCase()
+      .replace(/\\s+/g, '')
+      .replace(/\\.+$/g, '');
+    if (!h || !e) return false;
+    if (h === e) return true;
+    if (h.indexOf(e + '.') === 0) return true;
+    return false;
+  }
+  function caiNormalizeEmbedHiddenSubdomainsFromServer(arr) {
+    var out = [];
+    if (!arr || !arr.length) return out;
+    var maxN = 100;
+    var maxLen = 128;
+    for (var si = 0; si < arr.length && out.length < maxN; si++) {
+      var hs = arr[si];
+      if (typeof hs !== 'string') continue;
+      var ht = hs.trim().toLowerCase();
+      if (!ht || ht.indexOf('/') >= 0 || ht.indexOf(':') >= 0) continue;
+      var hp = ht.replace(/\\s+/g, '');
+      if (!hp) continue;
+      hp = hp.replace(/\\.+$/g, '');
+      if (!hp) continue;
+      if (!/^[a-z0-9.-]+$/.test(hp)) continue;
+      if (hp.length > maxLen) hp = hp.slice(0, maxLen);
+      out.push(hp);
+    }
+    return out;
+  }
+  function caiShouldHideEmbed() {
     var list = config.embedHiddenPaths;
-    if (!list || !list.length) return false;
-    var path = '/';
-    try {
-      path = window.location && window.location.pathname ? window.location.pathname : '/';
-    } catch (ePath) {}
-    for (var i = 0; i < list.length; i++) {
-      var p = list[i];
-      if (!p || typeof p !== 'string') continue;
-      if (path === p) return true;
-      if (p !== '/' && path.indexOf(p + '/') === 0) return true;
+    if (list && list.length) {
+      var path = '/';
+      try {
+        path = window.location && window.location.pathname ? window.location.pathname : '/';
+      } catch (ePath) {}
+      for (var i = 0; i < list.length; i++) {
+        var p = list[i];
+        if (!p || typeof p !== 'string') continue;
+        if (caiPathMatchesEmbedHiddenPattern(path, p)) return true;
+      }
+    }
+    var subList = config.embedHiddenSubdomains;
+    if (subList && subList.length) {
+      var host = '';
+      try {
+        host =
+          window.location && window.location.hostname
+            ? String(window.location.hostname)
+                .trim()
+                .toLowerCase()
+            : '';
+      } catch (eHost) {}
+      if (host) {
+        for (var j = 0; j < subList.length; j++) {
+          if (caiHostnameMatchesHiddenEntry(host, subList[j])) return true;
+        }
+      }
     }
     return false;
   }
@@ -1547,9 +1774,16 @@ const EMBED_SCRIPT = `
         if (Array.isArray(c.embedHiddenPaths)) {
           config.embedHiddenPaths = caiNormalizeEmbedHiddenPathsFromServer(c.embedHiddenPaths);
         }
+        if (Array.isArray(c.embedHiddenSubdomains)) {
+          config.embedHiddenSubdomains = caiNormalizeEmbedHiddenSubdomainsFromServer(c.embedHiddenSubdomains);
+        }
+        if (Array.isArray(c.widgetPathInsets)) {
+          config.widgetPathInsets = caiNormalizeWidgetPathInsetsFromServer(c.widgetPathInsets);
+        }
       }
     }
-    if (caiShouldHideEmbedForPath()) {
+    caiRefreshEffectiveWidgetInsets();
+    if (caiShouldHideEmbed()) {
       return;
     }
     (function reportEmbedLoad() {
@@ -1561,6 +1795,7 @@ const EMBED_SCRIPT = `
       } catch (e) {}
     })();
     render();
+    caiStartWidgetPathInsetWatch();
     if (openPanelOnLoad) openPanel();
     if (config.proactiveWelcomeEnabled && !openPanelOnLoad) {
       var delayMs = (config.proactiveWelcomeDelaySeconds || 0) * 1000;
@@ -1576,7 +1811,11 @@ const EMBED_SCRIPT = `
         if (!e.relatedTarget && e.clientY <= 0) { exitIntentFired = true; document.removeEventListener('mouseout', exitIntent); if (root && !panel) openPanel(); }
       });
     }
-  }).catch(function() { render(); });
+  }).catch(function() {
+    caiRefreshEffectiveWidgetInsets();
+    render();
+    caiStartWidgetPathInsetWatch();
+  });
 })();
 `.replace(/\n\s+/g, '\n').trim();
 

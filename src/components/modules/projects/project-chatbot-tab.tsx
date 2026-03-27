@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { ImagePlus } from 'lucide-react';
+import { ImagePlus, Plus, Trash2 } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -22,8 +22,11 @@ import {
   clampWidgetPositionOffsetPx,
   mergeWidgetConfig,
   parseEmbedHiddenPathsFromTextarea,
+  parseEmbedHiddenSubdomainsFromTextarea,
   widgetConfigToStorage,
   type ChatbotWidgetConfig,
+  type WidgetPathInsetRule,
+  WIDGET_PATH_INSETS_MAX,
 } from '@/lib/chatbot-widget-config';
 import { ChatbotPreview } from './chatbot-preview';
 import { ColorPicker } from '@/components/ui/color-picker';
@@ -51,6 +54,9 @@ export function ProjectChatbotTab({ projectId, initialChatbot }: ProjectChatbotT
   const [hiddenPathsText, setHiddenPathsText] = useState(() =>
     (mergeWidgetConfig(initialChatbot?.config).embedHiddenPaths ?? []).join('\n')
   );
+  const [hiddenSubdomainsText, setHiddenSubdomainsText] = useState(() =>
+    (mergeWidgetConfig(initialChatbot?.config).embedHiddenSubdomains ?? []).join('\n')
+  );
   const [logoUploading, setLogoUploading] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const debouncedConfig = useDebouncedValue(config, PREVIEW_DEBOUNCE_MS);
@@ -68,6 +74,7 @@ export function ProjectChatbotTab({ projectId, initialChatbot }: ProjectChatbotT
     const merged = mergeWidgetConfig(chatbot.config);
     setConfig(merged);
     setHiddenPathsText((merged.embedHiddenPaths ?? []).join('\n'));
+    setHiddenSubdomainsText((merged.embedHiddenSubdomains ?? []).join('\n'));
   }, [chatbot]);
 
   const getOrCreate = trpc.chatbot.getOrCreateForProject.useMutation({
@@ -95,6 +102,30 @@ export function ProjectChatbotTab({ projectId, initialChatbot }: ProjectChatbotT
     },
     []
   );
+
+  const updatePathInsetRule = useCallback((index: number, rule: WidgetPathInsetRule) => {
+    setConfig((prev) => ({
+      ...prev,
+      widgetPathInsets: prev.widgetPathInsets.map((r, i) => (i === index ? rule : r)),
+    }));
+  }, []);
+
+  const removePathInsetRule = useCallback((index: number) => {
+    setConfig((prev) => ({
+      ...prev,
+      widgetPathInsets: prev.widgetPathInsets.filter((_, i) => i !== index),
+    }));
+  }, []);
+
+  const addPathInsetRule = useCallback(() => {
+    setConfig((prev) => {
+      if (prev.widgetPathInsets.length >= WIDGET_PATH_INSETS_MAX) return prev;
+      return {
+        ...prev,
+        widgetPathInsets: [...prev.widgetPathInsets, { pathPrefix: '/example' }],
+      };
+    });
+  }, []);
 
   const patchNested = useCallback(
     <S extends keyof Pick<ChatbotWidgetConfig, 'bubble' | 'popup' | 'header' | 'footer' | 'messages'>>(
@@ -319,6 +350,123 @@ export function ProjectChatbotTab({ projectId, initialChatbot }: ProjectChatbotT
               </Field>
             </div>
           </div>
+          <div className="space-y-3 rounded-lg border border-border/60 bg-muted/20 p-4">
+            <div>
+              <p className="text-sm font-medium">Path-specific offsets</p>
+              <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                Override the insets above on matching URL paths (same prefix rules as &quot;Hide widget&quot;). If several
+                rules match, the longest path wins. Leave a number blank to keep the global inset for that edge. Rules
+                with no inset values are not saved. The live widget also checks the path about once per second so SPAs
+                pick up changes without a full reload.
+              </p>
+            </div>
+            <div className="space-y-4">
+              {config.widgetPathInsets.map((rule, index) => (
+                <div
+                  key={index}
+                  className="grid grid-cols-1 gap-3 rounded-md border border-border/50 bg-background p-3 sm:grid-cols-[1fr_repeat(4,minmax(0,1fr))_auto] sm:items-end"
+                >
+                  <Field label="Path prefix">
+                    <Input
+                      className="font-mono text-sm"
+                      placeholder="/pricing"
+                      value={rule.pathPrefix}
+                      onChange={(e) =>
+                        updatePathInsetRule(index, { ...rule, pathPrefix: e.target.value })
+                      }
+                    />
+                  </Field>
+                  <Field label="Top (px)">
+                    <Input
+                      type="number"
+                      min={-80}
+                      max={400}
+                      placeholder="—"
+                      value={rule.widgetInsetTopPx ?? ''}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        const next = { ...rule };
+                        if (v === '') delete next.widgetInsetTopPx;
+                        else next.widgetInsetTopPx = clampWidgetPositionOffsetPx(Number(v) || 0);
+                        updatePathInsetRule(index, next);
+                      }}
+                    />
+                  </Field>
+                  <Field label="Right (px)">
+                    <Input
+                      type="number"
+                      min={-80}
+                      max={400}
+                      placeholder="—"
+                      value={rule.widgetInsetRightPx ?? ''}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        const next = { ...rule };
+                        if (v === '') delete next.widgetInsetRightPx;
+                        else next.widgetInsetRightPx = clampWidgetPositionOffsetPx(Number(v) || 0);
+                        updatePathInsetRule(index, next);
+                      }}
+                    />
+                  </Field>
+                  <Field label="Bottom (px)">
+                    <Input
+                      type="number"
+                      min={-80}
+                      max={400}
+                      placeholder="—"
+                      value={rule.widgetInsetBottomPx ?? ''}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        const next = { ...rule };
+                        if (v === '') delete next.widgetInsetBottomPx;
+                        else next.widgetInsetBottomPx = clampWidgetPositionOffsetPx(Number(v) || 0);
+                        updatePathInsetRule(index, next);
+                      }}
+                    />
+                  </Field>
+                  <Field label="Left (px)">
+                    <Input
+                      type="number"
+                      min={-80}
+                      max={400}
+                      placeholder="—"
+                      value={rule.widgetInsetLeftPx ?? ''}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        const next = { ...rule };
+                        if (v === '') delete next.widgetInsetLeftPx;
+                        else next.widgetInsetLeftPx = clampWidgetPositionOffsetPx(Number(v) || 0);
+                        updatePathInsetRule(index, next);
+                      }}
+                    />
+                  </Field>
+                  <div className="flex sm:pb-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="text-muted-foreground hover:text-destructive"
+                      onClick={() => removePathInsetRule(index)}
+                      aria-label="Remove path rule"
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              disabled={config.widgetPathInsets.length >= WIDGET_PATH_INSETS_MAX}
+              onClick={addPathInsetRule}
+            >
+              <Plus className="size-4" />
+              Add path rule
+            </Button>
+          </div>
           <Field label="Welcome message">
             <Input
               value={config.welcomeMessage}
@@ -356,11 +504,38 @@ export function ProjectChatbotTab({ projectId, initialChatbot }: ProjectChatbotT
               }}
             />
             <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
-              One path per line. The live site compares your visitor&apos;s URL path (e.g.{' '}
-              <code className="text-[11px]">/checkout/review</code>) to each entry: a line{' '}
-              <code className="text-[11px]">/checkout</code> hides that page and anything under it. Leading{' '}
-              <code className="text-[11px]">/</code> is added if omitted. On single-page apps, the snippet usually
-              runs once per full page load unless you reload the embed on route changes.
+              One path per line. A plain prefix like <code className="text-[11px]">/checkout</code> hides{' '}
+              <code className="text-[11px]">/checkout</code> and everything under it. Use{' '}
+              <code className="text-[11px]">/report/:id</code> or <code className="text-[11px]">/report/*</code> for one
+              dynamic segment (e.g. <code className="text-[11px]">/report/123</code>). Use{' '}
+              <code className="text-[11px]">**</code> for multiple segments (e.g.{' '}
+              <code className="text-[11px]">/docs/**/print</code>). A trailing <code className="text-[11px]">/**</code>{' '}
+              matches that path and all nested routes. Leading <code className="text-[11px]">/</code> is added if
+              omitted. On single-page apps the embed usually runs once per full load unless you reload it on route
+              changes.
+            </p>
+          </Field>
+          <Field label="Hide widget on these hosts / subdomains">
+            <Textarea
+              rows={4}
+              className="font-mono text-sm min-h-[88px]"
+              placeholder={'admin\nstaging\ninternal.tools'}
+              value={hiddenSubdomainsText}
+              onChange={(e) => {
+                const v = e.target.value;
+                setHiddenSubdomainsText(v);
+                setConfig((prev) => ({
+                  ...prev,
+                  embedHiddenSubdomains: parseEmbedHiddenSubdomainsFromTextarea(v),
+                }));
+              }}
+            />
+            <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+              One entry per line, matched against the visitor&apos;s hostname (no{' '}
+              <code className="text-[11px]">https://</code>, no path).{' '}
+              <code className="text-[11px]">admin</code> hides <code className="text-[11px]">admin.yoursite.com</code>{' '}
+              and <code className="text-[11px]">admin.shop.co.uk</code>. You can also list a full host like{' '}
+              <code className="text-[11px]">shop.example.com</code>. Do not include port or <code className="text-[11px]">/</code>.
             </p>
           </Field>
           <div className="flex items-center gap-2">
