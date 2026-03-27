@@ -934,10 +934,12 @@ const EMBED_SCRIPT = `
     } else {
       var ppos = config.position || 'bottom-right';
       var pbsz = config.bubble && config.bubble.size ? config.bubble.size + 12 : 68;
-      var pyBottom = pbsz + caiWidgetInset('widgetInsetBottomPx');
-      var pyTop = pbsz + caiWidgetInset('widgetInsetTopPx');
-      var pxRight = caiWidgetInset('widgetInsetRightPx');
-      var pxLeft = caiWidgetInset('widgetInsetLeftPx');
+      /** When there is no data-container-id, #converseai-root is position:fixed with rpad + widgetInset* — do not add insets again on the panel or the gap doubles (matches chatbot-preview anchor + popup). */
+      var panelInsetStack = !!containerId;
+      var pyBottom = pbsz + (panelInsetStack ? caiWidgetInset('widgetInsetBottomPx') : 0);
+      var pyTop = pbsz + (panelInsetStack ? caiWidgetInset('widgetInsetTopPx') : 0);
+      var pxRight = panelInsetStack ? caiWidgetInset('widgetInsetRightPx') : 0;
+      var pxLeft = panelInsetStack ? caiWidgetInset('widgetInsetLeftPx') : 0;
       var pbottom = ppos.indexOf('bottom') !== -1 ? pyBottom + 'px' : 'auto';
       var ptop = ppos.indexOf('top') !== -1 ? pyTop + 'px' : 'auto';
       var pright = ppos.indexOf('right') !== -1 ? pxRight + 'px' : 'auto';
