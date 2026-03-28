@@ -5,6 +5,7 @@ import { cookies } from 'next/headers';
 import { sessionOptions, type SessionData } from '@/lib/session';
 import { prisma } from '@/lib/prisma';
 import { LiveChatContent } from '@/components/modules/live-chat/live-chat-content';
+import { ServiceStatusPanel } from '@/components/modules/system/service-status-panel';
 import { Button } from '@/components/ui/button';
 import { MessageCircle } from 'lucide-react';
 
@@ -39,7 +40,8 @@ export default async function ProjectLiveChatPage({
           </Link>
         </Button>
       </div>
-      <div className="mt-6">
+      <div className="mt-6 space-y-6">
+        <ServiceStatusPanel variant="card" />
         <LiveChatContent projectId={projectId} />
       </div>
     </div>

@@ -6,6 +6,7 @@ import { trpc } from '@/utils/trpc';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DashboardOverviewCards } from './dashboard-overview-cards';
+import { ServiceStatusPanel } from '@/components/modules/system/service-status-panel';
 import { Plus, FolderPlus, MessageSquare, Code2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -139,7 +140,8 @@ export function DashboardContent() {
             </div>
           </div>
 
-          <div className="px-5 -mt-2 pb-10 sm:px-6 md:px-8 lg:px-10">
+          <div className="px-5 -mt-2 pb-10 sm:px-6 md:px-8 lg:px-10 space-y-6">
+            <ServiceStatusPanel variant="inline" />
             <DashboardOverviewCards firstProjectId={data?.items?.[0]?.id ?? null} />
           </div>
         </>

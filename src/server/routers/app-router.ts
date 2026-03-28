@@ -13,10 +13,12 @@ import { humanAgentsRouter } from './human-agents-router';
 import { cannedResponseRouter } from './canned-response-router';
 import { analyticsRouter } from './analytics-router';
 import { contactsRouter } from './contacts-router';
+import { systemRouter } from './system-router';
 import { publicProcedure, router } from '@/server/trpc';
 
 export const appRouter = router({
   health: publicProcedure.query(() => ({ status: 'ok' })),
+  system: systemRouter,
   auth: authRouter,
   protectedExample: protectedExampleRouter,
   projects: projectsRouter,

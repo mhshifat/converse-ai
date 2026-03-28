@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { resolveVoiceSignalingHealthUrl } from '@/lib/voice-signaling-health-url';
+import { checkVoiceSignalingHealth } from '@/lib/voice-signaling-health-check';
 
 function isAuthorized(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET?.trim();
@@ -19,31 +19,23 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const healthUrl = resolveVoiceSignalingHealthUrl();
-  if (!healthUrl) {
+  const result = await checkVoiceSignalingHealth();
+  if (!result.configured) {
     return NextResponse.json(
-      { ok: false, skipped: true, reason: 'No signaling URL configured' },
+      { ok: false, skipped: true, reason: result.message },
       { status: 200 }
     );
   }
-
-  try {
-    const res = await fetch(healthUrl, {
-      method: 'GET',
-      cache: 'no-store',
-      signal: AbortSignal.timeout(15_000),
-      headers: { Accept: 'text/plain' },
-    });
-    const text = await res.text();
-    if (!res.ok) {
-      return NextResponse.json(
-        { ok: false, status: res.status, body: text.slice(0, 200) },
-        { status: 502 }
-      );
-    }
-    return NextResponse.json({ ok: true, healthUrl, response: text.slice(0, 80) });
-  } catch (e) {
-    const message = e instanceof Error ? e.message : 'fetch failed';
-    return NextResponse.json({ ok: false, error: message }, { status: 502 });
+  if (!result.ok) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: result.error,
+        httpStatus: result.httpStatus,
+        latencyMs: result.latencyMs,
+      },
+      { status: 502 }
+    );
   }
+  return NextResponse.json({ ok: true, latencyMs: result.latencyMs, checkedAt: result.checkedAt });
 }

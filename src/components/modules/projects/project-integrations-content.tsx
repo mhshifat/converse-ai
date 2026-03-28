@@ -2,11 +2,11 @@
 
 import React from 'react';
 import { trpc } from '@/utils/trpc';
-import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ArrowLeft, Globe, Send } from 'lucide-react';
 import { ChatbotEmbedSection } from './chatbot-embed-section';
 import { ProjectDeliveryIntegrations } from './project-delivery-integrations';
+import { ServiceStatusPanel } from '@/components/modules/system/service-status-panel';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface ProjectIntegrationsContentProps {
@@ -40,6 +40,7 @@ export function ProjectIntegrationsContent({ projectId }: ProjectIntegrationsCon
 
   return (
     <div className="space-y-6">
+      <ServiceStatusPanel variant="card" />
       <Tabs defaultValue="website" className="w-full">
         <TabsList className="grid w-full max-w-md grid-cols-2">
           <TabsTrigger value="website" className="gap-2">
