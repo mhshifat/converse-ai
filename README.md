@@ -65,3 +65,14 @@ For **live voice** during handoff (human speaks, customer hears in real time), r
 2. In the Next.js app set `NEXT_PUBLIC_VOICE_SIGNALING_WS_URL` (e.g. `ws://localhost:3001` for dev, `wss://your-signaling-host` for prod).
 
 If unset, handoff still works with text and recorded voice messages; live WebRTC is simply disabled.
+
+### Keep Render (free tier) signaling warm from Next.js
+
+The signaling server exposes `GET /health`. Your Next app can ping it on a schedule so the Render instance wakes up more often:
+
+- **Vercel**: `vercel.json` includes a cron every 10 minutes calling `/api/cron/voice-signaling-ping`. Set **`CRON_SECRET`** in the Vercel project env; Vercel Cron will send `Authorization: Bearer <CRON_SECRET>` automatically.
+- **Other hosts**: Use any scheduler (GitHub Actions, cron-job.org) to `GET` your deployed URL  
+  `https://your-app.com/api/cron/voice-signaling-ping` with header `Authorization: Bearer <CRON_SECRET>` (same secret in env).
+- Optional **`VOICE_SIGNALING_HTTP_URL`**: full HTTPS base if the health check URL should differ from the default derived from `NEXT_PUBLIC_VOICE_SIGNALING_WS_URL` (e.g. `https://your-service.onrender.com`).
+
+This does not guarantee zero cold starts or stable WebSockets through a spin-down; see `voice-signaling-server/README.md`.
