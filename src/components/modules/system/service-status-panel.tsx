@@ -132,10 +132,13 @@ export function ServiceStatusPanel({ variant = 'card', className }: ServiceStatu
               <p className="text-sm font-medium text-foreground">Service status</p>
               {!isLoading && data ? (
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {operationalCount}/{total} operational · checks run from this app
+                  {operationalCount}/{total} operational · checks run from this app ·{' '}
+                  <span className="text-muted-foreground/90">not shown to website visitors</span>
                 </p>
               ) : (
-                <p className="text-xs text-muted-foreground mt-0.5">Checks run from this app (not your browser).</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Checks run from this app (not your browser). Only signed-in team members see this.
+                </p>
               )}
             </div>
             {isLoading && !data ? loadingBlock : null}
@@ -173,7 +176,8 @@ export function ServiceStatusPanel({ variant = 'card', className }: ServiceStatu
         <div>
           <h3 className="font-semibold text-foreground">Service status</h3>
           <p className="text-sm text-muted-foreground mt-0.5">
-            External dependencies for this deployment. Checks run from your app server (not the browser).
+            External dependencies for this deployment. Checks run from your app server (not the browser). This panel
+            is only visible after sign-in—not to visitors using your embedded chat.
           </p>
           {!isLoading && data ? (
             <p className="text-xs text-muted-foreground mt-1.5">

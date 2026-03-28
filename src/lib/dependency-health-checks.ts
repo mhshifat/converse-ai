@@ -33,7 +33,7 @@ function nowIso() {
 async function checkDatabase(): Promise<ServiceDependencyCheck> {
   const checkedAt = nowIso();
   const name = 'Database';
-  const description = 'PostgreSQL — projects, conversations, and sessions.';
+  const description = 'Core data: projects, conversations, and sessions.';
   const started = Date.now();
   try {
     await prisma.$queryRaw`SELECT 1`;
@@ -63,8 +63,8 @@ async function checkDatabase(): Promise<ServiceDependencyCheck> {
 
 async function checkGroq(): Promise<ServiceDependencyCheck> {
   const checkedAt = nowIso();
-  const name = 'Groq API';
-  const description = 'AI chat, optional embeddings, and voice transcription / TTS.';
+  const name = 'AI & voice';
+  const description = 'Chat, optional embeddings, transcription, and speech synthesis.';
   const key = process.env.GROQ_API_KEY?.trim();
   if (!key) {
     return {
@@ -129,8 +129,8 @@ async function checkCloudinary(): Promise<ServiceDependencyCheck | null> {
   if (provider !== 'cloudinary') return null;
 
   const checkedAt = nowIso();
-  const name = 'Media uploads (Cloudinary)';
-  const description = 'Chatbot logos and file attachments.';
+  const name = 'Media uploads';
+  const description = 'Logos and chat attachments.';
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME?.trim();
   const apiKey = process.env.CLOUDINARY_API_KEY?.trim();
   const apiSecret = process.env.CLOUDINARY_API_SECRET?.trim();
@@ -204,8 +204,8 @@ async function checkResend(): Promise<ServiceDependencyCheck | null> {
   const key = process.env.RESEND_API_KEY?.trim();
 
   const checkedAt = nowIso();
-  const name = 'Email (Resend)';
-  const description = 'System and delivery emails when using Resend.';
+  const name = 'Transactional email';
+  const description = 'System and delivery email when configured.';
   if (!key) {
     return {
       id: 'resend_email',
@@ -270,8 +270,8 @@ async function checkTwilio(): Promise<ServiceDependencyCheck | null> {
   if (provider !== 'twilio') return null;
 
   const checkedAt = nowIso();
-  const name = 'SMS (Twilio)';
-  const description = 'SMS delivery when SMS_PROVIDER=twilio.';
+  const name = 'SMS delivery';
+  const description = 'Outbound SMS when your project uses an SMS provider.';
   const accountSid = process.env.TWILIO_ACCOUNT_SID?.trim();
   const authToken = process.env.TWILIO_AUTH_TOKEN?.trim();
   if (!accountSid || !authToken) {
@@ -340,7 +340,7 @@ async function checkTwilio(): Promise<ServiceDependencyCheck | null> {
 async function checkVoiceSignalingAsDependency(): Promise<ServiceDependencyCheck> {
   const checkedAt = nowIso();
   const name = 'Live voice signaling';
-  const description = 'WebRTC signaling for live human voice during handoff.';
+  const description = 'Real-time call setup for live human voice during handoff.';
   const r = await checkVoiceSignalingHealth();
   if (!r.configured) {
     return {
