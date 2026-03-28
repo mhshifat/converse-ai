@@ -384,21 +384,33 @@ const EMBED_SCRIPT = `
       return;
     }
     tearDownHandoffWebRtc();
-    var base = voiceSignalingWsUrl;
-    var url = base.indexOf('ws://') === 0 || base.indexOf('wss://') === 0 ? base : 'wss://' + base;
-    var ws;
-    try {
-      ws = new WebSocket(url);
-    } catch (e4) {
-      return;
-    }
-    voiceHandoffWs = ws;
-    ws._caiConvoId = conversationId;
-    ws.onopen = function () {
+    var cidForVoice = conversationId;
+    trpcQuery('widget.getVoiceSignalingToken', { apiKey: apiKey, conversationId: cidForVoice }).then(function (res) {
+      var u = trpcUnwrap(res);
+      if (u.error || !u.data || !u.data.token) return;
+      var voiceJwt = u.data.token;
+      var base = voiceSignalingWsUrl;
+      var url = base.indexOf('ws://') === 0 || base.indexOf('wss://') === 0 ? base : 'wss://' + base;
+      var ws;
       try {
-        ws.send(JSON.stringify({ type: 'join', conversationId: conversationId, role: 'customer' }));
-      } catch (e5) {}
-    };
+        ws = new WebSocket(url);
+      } catch (e4) {
+        return;
+      }
+      voiceHandoffWs = ws;
+      ws._caiConvoId = cidForVoice;
+      ws.onopen = function () {
+        try {
+          ws.send(
+            JSON.stringify({
+              type: 'join',
+              conversationId: cidForVoice,
+              role: 'customer',
+              token: voiceJwt,
+            })
+          );
+        } catch (e5) {}
+      };
     ws.onmessage = function (event) {
       try {
         var data = JSON.parse(event.data);
@@ -500,10 +512,11 @@ const EMBED_SCRIPT = `
       if (voiceHandoffWs === ws) voiceHandoffWs = null;
       if (typeof refreshVoiceFooterLabel === 'function') refreshVoiceFooterLabel();
     };
-    ws.onerror = function () {
-      liveVoiceConnected = false;
-      try { ws.close(); } catch (e9) {}
-    };
+      ws.onerror = function () {
+        liveVoiceConnected = false;
+        try { ws.close(); } catch (e9) {}
+      };
+    });
   }
 
   /** Shallow merge patch into base; includes keys that exist only on patch (merge() did not — it dropped e.g. header.subtitle, logoUrl). */

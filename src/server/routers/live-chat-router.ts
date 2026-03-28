@@ -1,6 +1,8 @@
+import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 import { router, protectedProcedure } from '@/server/trpc';
 import { withCorrelationError, throwNotFoundWithId } from '@/server/trpc-error';
+import { getVoiceSignalingJwtSecret, signVoiceJoinToken } from '@/server/lib/voice-signaling-jwt';
 import * as conversationService from '../services/conversation-service';
 import * as conversationRepo from '../repositories/conversation-repository';
 import * as humanAgentRepo from '../repositories/human-agent-repository';
@@ -123,6 +125,36 @@ export const liveChatRouter = router({
         const result = await conversationService.endConversation(input.conversationId);
         if (!result) throwNotFoundWithId(correlationId, 'Conversation not found');
         return result;
+      });
+    }),
+
+  /** Short-lived JWT for WebSocket join on the voice signaling server (human agent role). */
+  getVoiceSignalingToken: protectedProcedure
+    .input(z.object({ conversationId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      return withCorrelationError('liveChat.getVoiceSignalingToken', async (correlationId) => {
+        const isHuman = await humanAgentRepo.isHumanAgent(ctx.user.id, ctx.user.tenantId);
+        if (!isHuman) throw new Error('You are not a human agent');
+        const secret = getVoiceSignalingJwtSecret();
+        if (!secret) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Live voice signaling is not configured (missing VOICE_SIGNALING_JWT_SECRET).',
+          });
+        }
+        const ok = await conversationService.assertHumanVoiceSignalingAllowed(
+          input.conversationId,
+          ctx.user.id,
+          ctx.user.tenantId
+        );
+        if (!ok) throwNotFoundWithId(correlationId, 'Conversation not found or voice not available');
+        return {
+          token: signVoiceJoinToken({
+            conversationId: input.conversationId,
+            role: 'human',
+            secret,
+          }),
+        };
       });
     }),
 

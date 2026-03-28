@@ -169,6 +169,7 @@ export function LiveChatbotPreview({
 
   const [isStreamSending, setIsStreamSending] = useState(false);
   const streamAgentIndexRef = useRef<number | null>(null);
+  const utils = trpc.useUtils();
 
   const endConversation = trpc.widget.endConversation.useMutation({
     onSuccess: (data, variables) => {
@@ -352,86 +353,114 @@ export function LiveChatbotPreview({
       setLiveVoiceConnected(false);
       return;
     }
-    const url =
-      signalingUrl.startsWith('ws://') || signalingUrl.startsWith('wss://')
-        ? signalingUrl
-        : `wss://${signalingUrl}`;
-    const ws = new WebSocket(url);
-    voiceSignalingWsRef.current = ws;
+    let cancelled = false;
+    let ws: WebSocket | null = null;
 
-    ws.onopen = () => {
-      ws.send(JSON.stringify({ type: 'join', conversationId, role: 'customer' }));
-    };
-
-    ws.onmessage = async (event) => {
+    void (async () => {
+      let token: string;
       try {
-        const data = JSON.parse(event.data as string) as {
-          type: string;
-          sdp?: RTCSessionDescriptionInit;
-          candidate?: RTCIceCandidateInit;
-          from?: string;
-        };
-        if (data.type === 'joined') {
-          return;
-        }
-        if (data.type === 'error') {
-          return;
-        }
-        if (data.type === 'offer' && data.sdp) {
-          const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
-          voicePeerConnectionRef.current = pc;
-          const audio = document.createElement('audio');
-          audio.autoplay = true;
-          voiceRemoteAudioRef.current = audio;
-          pc.ontrack = (e) => {
-            if (e.streams[0]) {
-              audio.srcObject = e.streams[0];
-              setLiveVoiceConnected(true);
-            }
-          };
-          await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
-          const recStream = streamRef.current;
-          let micStream: MediaStream;
-          if (
-            isRecordingRef.current &&
-            recStream?.getAudioTracks().some((t) => t.readyState === 'live')
-          ) {
-            micStream = recStream;
-            voiceHandoffLocalStreamRef.current = null;
-          } else {
-            micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            voiceHandoffLocalStreamRef.current = micStream;
-          }
-          micStream.getAudioTracks().forEach((track) => pc.addTrack(track, micStream));
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          ws.send(JSON.stringify({ type: 'answer', sdp: pc.localDescription }));
-          pc.onicecandidate = (e) => {
-            if (e.candidate) ws.send(JSON.stringify({ type: 'ice-candidate', candidate: e.candidate }));
-          };
-          return;
-        }
-        if (data.type === 'ice-candidate' && data.candidate) {
-          const pc = voicePeerConnectionRef.current;
-          if (pc) pc.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(() => {});
-        }
-      } catch (_) {
-        // ignore parse/handling errors
+        const res = await utils.widget.getVoiceSignalingToken.fetch({
+          apiKey,
+          conversationId,
+        });
+        token = res.token;
+      } catch {
+        return;
       }
-    };
+      if (cancelled) return;
+      const url =
+        signalingUrl.startsWith('ws://') || signalingUrl.startsWith('wss://')
+          ? signalingUrl
+          : `wss://${signalingUrl}`;
+      ws = new WebSocket(url);
+      if (cancelled) {
+        ws.close();
+        return;
+      }
+      voiceSignalingWsRef.current = ws;
 
-    ws.onclose = () => {
-      setLiveVoiceConnected(false);
-      voicePeerConnectionRef.current?.close();
-      voicePeerConnectionRef.current = null;
-      voiceHandoffLocalStreamRef.current?.getTracks().forEach((t) => t.stop());
-      voiceHandoffLocalStreamRef.current = null;
-      voiceRemoteAudioRef.current?.remove();
-      voiceRemoteAudioRef.current = null;
-    };
+      ws.onopen = () => {
+        ws!.send(
+          JSON.stringify({
+            type: 'join',
+            conversationId,
+            role: 'customer',
+            token,
+          })
+        );
+      };
+
+      ws.onmessage = async (event) => {
+        try {
+          const data = JSON.parse(event.data as string) as {
+            type: string;
+            sdp?: RTCSessionDescriptionInit;
+            candidate?: RTCIceCandidateInit;
+            from?: string;
+          };
+          if (data.type === 'joined') {
+            return;
+          }
+          if (data.type === 'error') {
+            return;
+          }
+          if (data.type === 'offer' && data.sdp) {
+            const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+            voicePeerConnectionRef.current = pc;
+            const audio = document.createElement('audio');
+            audio.autoplay = true;
+            voiceRemoteAudioRef.current = audio;
+            pc.ontrack = (e) => {
+              if (e.streams[0]) {
+                audio.srcObject = e.streams[0];
+                setLiveVoiceConnected(true);
+              }
+            };
+            await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+            const recStream = streamRef.current;
+            let micStream: MediaStream;
+            if (
+              isRecordingRef.current &&
+              recStream?.getAudioTracks().some((t) => t.readyState === 'live')
+            ) {
+              micStream = recStream;
+              voiceHandoffLocalStreamRef.current = null;
+            } else {
+              micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+              voiceHandoffLocalStreamRef.current = micStream;
+            }
+            micStream.getAudioTracks().forEach((track) => pc.addTrack(track, micStream));
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            ws!.send(JSON.stringify({ type: 'answer', sdp: pc.localDescription }));
+            pc.onicecandidate = (e) => {
+              if (e.candidate) ws!.send(JSON.stringify({ type: 'ice-candidate', candidate: e.candidate }));
+            };
+            return;
+          }
+          if (data.type === 'ice-candidate' && data.candidate) {
+            const pc = voicePeerConnectionRef.current;
+            if (pc) pc.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(() => {});
+          }
+        } catch (_) {
+          // ignore parse/handling errors
+        }
+      };
+
+      ws.onclose = () => {
+        setLiveVoiceConnected(false);
+        voicePeerConnectionRef.current?.close();
+        voicePeerConnectionRef.current = null;
+        voiceHandoffLocalStreamRef.current?.getTracks().forEach((t) => t.stop());
+        voiceHandoffLocalStreamRef.current = null;
+        voiceRemoteAudioRef.current?.remove();
+        voiceRemoteAudioRef.current = null;
+      };
+    })();
 
     return () => {
-      ws.close();
+      cancelled = true;
+      ws?.close();
       voiceSignalingWsRef.current = null;
       voicePeerConnectionRef.current?.close();
       voicePeerConnectionRef.current = null;
@@ -441,7 +470,7 @@ export function LiveChatbotPreview({
       voiceRemoteAudioRef.current = null;
       setLiveVoiceConnected(false);
     };
-  }, [signalingUrl, conversationId, handoffRequested, mode]);
+  }, [signalingUrl, conversationId, handoffRequested, mode, apiKey, utils]);
 
   const clearInactivityTimers = useCallback(() => {
     if (warningTimerRef.current) {

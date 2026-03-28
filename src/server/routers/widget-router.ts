@@ -1,6 +1,8 @@
+import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 import { router, publicProcedure } from '@/server/trpc';
 import { withCorrelationError, throwNotFoundWithId } from '@/server/trpc-error';
+import { getVoiceSignalingJwtSecret, signVoiceJoinToken } from '@/server/lib/voice-signaling-jwt';
 import * as conversationService from '../services/conversation-service';
 import * as groqVoice from '../services/groq-voice-service';
 import { WIDGET_CHAT_UNAVAILABLE } from '../widget-customer-messages';
@@ -126,6 +128,38 @@ export const widgetRouter = router({
         const data = await conversationService.getConversationMessagesForWidget(input.conversationId);
         if (!data) throwNotFoundWithId(correlationId, 'Conversation not found');
         return data;
+      });
+    }),
+
+  /** Short-lived JWT for WebSocket join on the voice signaling server (customer role). */
+  getVoiceSignalingToken: publicProcedure
+    .input(
+      z.object({
+        apiKey: z.string().min(1),
+        conversationId: z.string().uuid(),
+      })
+    )
+    .query(async ({ input }) => {
+      return withCorrelationError('widget.getVoiceSignalingToken', async (correlationId) => {
+        const secret = getVoiceSignalingJwtSecret();
+        if (!secret) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Live voice is not configured.',
+          });
+        }
+        const ok = await conversationService.assertWidgetVoiceSignalingForCustomer(
+          input.apiKey,
+          input.conversationId
+        );
+        if (!ok) throwNotFoundWithId(correlationId, 'Conversation not found or voice not available');
+        return {
+          token: signVoiceJoinToken({
+            conversationId: input.conversationId,
+            role: 'customer',
+            secret,
+          }),
+        };
       });
     }),
 

@@ -160,6 +160,49 @@ export async function getChatbotByApiKey(apiKey: string) {
   return chatbot;
 }
 
+/** Widget (customer) may open voice signaling only for their chatbot’s active call + handoff. */
+export async function assertWidgetVoiceSignalingForCustomer(
+  apiKey: string,
+  conversationId: string
+): Promise<boolean> {
+  const chatbot = await getChatbotByApiKey(apiKey);
+  if (!chatbot) return false;
+  const conv = await prisma.conversation.findFirst({
+    where: {
+      id: conversationId,
+      chatbot_id: chatbot.id,
+      status: 'active',
+    },
+    select: {
+      handoff_requested_at: true,
+      assigned_human_agent_id: true,
+      channel: true,
+    },
+  });
+  if (!conv) return false;
+  if (!conv.handoff_requested_at && !conv.assigned_human_agent_id) return false;
+  if (conv.channel !== 'call') return false;
+  return true;
+}
+
+/** Assigned human agent may open voice signaling only for call + handoff conversations. */
+export async function assertHumanVoiceSignalingAllowed(
+  conversationId: string,
+  userId: string,
+  tenantId: string
+): Promise<boolean> {
+  const conv = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    include: { chatbot: { include: { project: { select: { tenant_id: true } } } } },
+  });
+  if (!conv || conv.status !== 'active') return false;
+  if (conv.chatbot.project.tenant_id !== tenantId) return false;
+  if (conv.assigned_human_agent_id !== userId) return false;
+  if (conv.channel !== 'call') return false;
+  if (!conv.handoff_requested_at && !conv.assigned_human_agent_id) return false;
+  return true;
+}
+
 const EMBED_BEACON_THROTTLE_MS = 60_000;
 
 /** Records that the embed script ran on a page (origin only). Throttled per chatbot to limit writes. */

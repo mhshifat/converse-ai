@@ -209,6 +209,13 @@ export function LiveChatContent({ projectId }: LiveChatContentProps = {}) {
 
   const joinLiveVoice = useCallback(async () => {
     if (!selectedId || !signalingUrl) return;
+    let token: string;
+    try {
+      const res = await utils.liveChat.getVoiceSignalingToken.fetch({ conversationId: selectedId });
+      token = res.token;
+    } catch {
+      return;
+    }
     const url =
       signalingUrl.startsWith('ws://') || signalingUrl.startsWith('wss://')
         ? signalingUrl
@@ -217,7 +224,14 @@ export function LiveChatContent({ projectId }: LiveChatContentProps = {}) {
     voiceSignalingWsRef.current = ws;
 
     ws.onopen = () => {
-      ws.send(JSON.stringify({ type: 'join', conversationId: selectedId, role: 'human' }));
+      ws.send(
+        JSON.stringify({
+          type: 'join',
+          conversationId: selectedId,
+          role: 'human',
+          token,
+        })
+      );
     };
 
     ws.onmessage = async (event) => {
@@ -275,7 +289,7 @@ export function LiveChatContent({ projectId }: LiveChatContentProps = {}) {
 
     ws.onclose = () => leaveLiveVoice();
     ws.onerror = () => leaveLiveVoice();
-  }, [selectedId, signalingUrl, leaveLiveVoice]);
+  }, [selectedId, signalingUrl, leaveLiveVoice, utils]);
 
   useEffect(() => {
     if (!selectedId || !isAssigned) leaveLiveVoice();

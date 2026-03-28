@@ -66,6 +66,31 @@ For **live voice** during handoff (human speaks, customer hears in real time), r
 
 If unset, handoff still works with text and recorded voice messages; live WebRTC is simply disabled.
 
+**Join auth:** Set the same **`VOICE_SIGNALING_JWT_SECRET`** on the Next.js app and the signaling server. For local signaling without JWT, you can set **`ALLOW_INSECURE_VOICE_SIGNALING=true`** on the signaling server only (never in production).
+
+### Manual test checklist (full voice handoff)
+
+**Prereqs**
+
+- [ ] `NEXT_PUBLIC_VOICE_SIGNALING_WS_URL` points at your signaling host (`ws://…` local, `wss://…` prod).
+- [ ] **Production:** `VOICE_SIGNALING_JWT_SECRET` is set and **identical** on web and signaling. **Dev (optional):** `ALLOW_INSECURE_VOICE_SIGNALING=true` on signaling only if you are not using JWT locally.
+
+**Customer path (widget embed or project preview)**
+
+- [ ] Start a **voice** conversation (`call` channel) and reach **human handoff** (agent assigned, handoff active for that conversation).
+- [ ] Confirm the signaling WebSocket connects and stays up (no immediate close; customer UI shows live voice connected when appropriate).
+- [ ] With the agent on live voice, verify **customer → agent** audio (speak a short test phrase on the customer side).
+
+**Human agent path (live chat app)**
+
+- [ ] Open **Live chat**, select the same conversation, **assign to me** if it is not already assigned.
+- [ ] Use **Join live voice** (or equivalent) and confirm **agent → customer** and **customer → agent** audio.
+
+**Wrap-up**
+
+- [ ] **Leave** voice or **end** the conversation on both sides: mic stops, remote audio stops, no repeated errors in the browser console.
+- [ ] **Optional hardening check:** With JWT enforced, a raw WebSocket that sends `join` **without** a valid `token` should be rejected (see signaling server logs / close reason).
+
 ### Keep Render (free tier) signaling warm from Next.js
 
 The signaling server exposes `GET /health`. Your Next app can ping it on a schedule so the Render instance wakes up more often:
