@@ -91,13 +91,24 @@ If unset, handoff still works with text and recorded voice messages; live WebRTC
 - [ ] **Leave** voice or **end** the conversation on both sides: mic stops, remote audio stops, no repeated errors in the browser console.
 - [ ] **Optional hardening check:** With JWT enforced, a raw WebSocket that sends `join` **without** a valid `token` should be rejected (see signaling server logs / close reason).
 
-### Keep Render (free tier) signaling warm from Next.js
+### Keep Render (free tier) signaling warm (cron-job.org)
 
-The signaling server exposes `GET /health`. Your Next app can ping it on a schedule so the Render instance wakes up more often:
+The signaling server exposes **`GET /health`**. To avoid Vercel Hobby cron limits and wake Render more often, use an external scheduler.
 
-- **Vercel**: `vercel.json` schedules this **once daily** (08:00 UTC) so it works on the **Hobby** plan (Hobby only allows daily crons). On **Pro**, you can change the schedule to run more often (e.g. every 10 minutes: `*/10 * * * *`). Set **`CRON_SECRET`** in the Vercel project env; Vercel Cron will send `Authorization: Bearer <CRON_SECRET>` automatically.
-- **Other hosts**: Use any scheduler (GitHub Actions, cron-job.org) to `GET` your deployed URL  
-  `https://your-app.com/api/cron/voice-signaling-ping` with header `Authorization: Bearer <CRON_SECRET>` (same secret in env).
-- Optional **`VOICE_SIGNALING_HTTP_URL`**: full HTTPS base if the health check URL should differ from the default derived from `NEXT_PUBLIC_VOICE_SIGNALING_WS_URL` (e.g. `https://your-service.onrender.com`).
+**Recommended — [cron-job.org](https://cron-job.org)** (free tier works):
+
+1. Create a cron job with **URL** `https://your-signaling-service.onrender.com/health` (your real Render hostname).
+2. **Schedule**: every **10–15 minutes** (e.g. `*/10 * * * *` in their UI if supported, or the closest interval).
+3. Method **GET**. No headers required unless you later protect `/health`.
+
+This hits **Render directly**, so it does not depend on Vercel cron.
+
+**Optional — ping through your Next.js app** (if you want the check to run from the same env as production):
+
+- URL: `https://your-app.vercel.app/api/cron/voice-signaling-ping`
+- Header: `Authorization: Bearer <CRON_SECRET>` (set **`CRON_SECRET`** in Vercel env to match).
+- Same schedule as above on cron-job.org.
+
+Optional **`VOICE_SIGNALING_HTTP_URL`**: used by the app’s health checks and the ping route when the HTTP base differs from `NEXT_PUBLIC_VOICE_SIGNALING_WS_URL`.
 
 This does not guarantee zero cold starts or stable WebSockets through a spin-down; see `voice-signaling-server/README.md`.

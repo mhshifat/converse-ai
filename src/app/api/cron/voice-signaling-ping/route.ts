@@ -11,9 +11,9 @@ function isAuthorized(req: NextRequest): boolean {
 }
 
 /**
- * Periodic ping so a free-tier signaling host (e.g. Render) stays warm.
- * Schedule: Vercel Cron (vercel.json — daily on Hobby; more frequent needs Pro or an external cron)
- * or any external scheduler hitting this URL with CRON_SECRET.
+ * Optional: periodic ping so a free-tier signaling host (e.g. Render) stays warm.
+ * Prefer scheduling **cron-job.org** (or similar) against the signaling server’s `GET /health` directly.
+ * Or call this route from an external cron with header `Authorization: Bearer <CRON_SECRET>`.
  */
 export async function GET(req: NextRequest) {
   if (!isAuthorized(req)) {
