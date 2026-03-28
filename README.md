@@ -95,7 +95,7 @@ If unset, handoff still works with text and recorded voice messages; live WebRTC
 
 The signaling server exposes `GET /health`. Your Next app can ping it on a schedule so the Render instance wakes up more often:
 
-- **Vercel**: `vercel.json` includes a cron every 10 minutes calling `/api/cron/voice-signaling-ping`. Set **`CRON_SECRET`** in the Vercel project env; Vercel Cron will send `Authorization: Bearer <CRON_SECRET>` automatically.
+- **Vercel**: `vercel.json` schedules this **once daily** (08:00 UTC) so it works on the **Hobby** plan (Hobby only allows daily crons). On **Pro**, you can change the schedule to run more often (e.g. every 10 minutes: `*/10 * * * *`). Set **`CRON_SECRET`** in the Vercel project env; Vercel Cron will send `Authorization: Bearer <CRON_SECRET>` automatically.
 - **Other hosts**: Use any scheduler (GitHub Actions, cron-job.org) to `GET` your deployed URL  
   `https://your-app.com/api/cron/voice-signaling-ping` with header `Authorization: Bearer <CRON_SECRET>` (same secret in env).
 - Optional **`VOICE_SIGNALING_HTTP_URL`**: full HTTPS base if the health check URL should differ from the default derived from `NEXT_PUBLIC_VOICE_SIGNALING_WS_URL` (e.g. `https://your-service.onrender.com`).
