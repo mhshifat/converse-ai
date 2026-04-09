@@ -1083,10 +1083,12 @@ export function LiveChatbotPreview({
           <button
             type="button"
             onClick={() => setOpen((o) => !o)}
-            className="flex items-center justify-center transition-all duration-200 hover:scale-110 active:scale-95"
+            className="box-border m-0 flex shrink-0 origin-center items-center justify-center p-0 leading-none transition-transform duration-200 hover:scale-110 active:scale-95"
             style={{
               width: bubble.size,
+              minWidth: bubble.size,
               height: bubble.size,
+              minHeight: bubble.size,
               borderRadius: bubble.borderRadius,
               backgroundColor: bubbleBg,
               color: bubble.iconColor,
@@ -1094,7 +1096,7 @@ export function LiveChatbotPreview({
             }}
             aria-label="Toggle chat"
           >
-            <MessageSquare className="size-6" />
+            <MessageSquare className="size-6 shrink-0 block" aria-hidden />
           </button>
 
           {/* Popup */}
