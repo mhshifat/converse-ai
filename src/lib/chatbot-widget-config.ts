@@ -108,6 +108,12 @@ export interface ChatbotWidgetConfig {
    */
   embedHiddenPaths: string[];
   /**
+   * If non-empty, the embed loads **only** on paths that match at least one entry (same pattern rules as
+   * `embedHiddenPaths`). When empty, path allowlist is disabled and the widget may appear on any path
+   * (subject to `embedHiddenPaths`). Example: a single line `/` shows the widget only on the homepage.
+   */
+  embedVisiblePaths: string[];
+  /**
    * Host / subdomain labels where the embed must not load. Compared to `location.hostname` (no port).
    * A line `admin` hides `admin.example.com` and `admin.shop.co.uk`. A line `staging.app` hides
    * `staging.app.example.com`. Exact hostname match also counts (e.g. `shop.example.com`).
@@ -199,6 +205,7 @@ export const DEFAULT_WIDGET_CONFIG: ChatbotWidgetConfig = {
   attachmentsEnabled: false,
   inactivityMinutes: 3,
   embedHiddenPaths: [],
+  embedVisiblePaths: [],
   embedHiddenSubdomains: [],
   widgetPathInsets: [],
   proactiveWelcomeEnabled: false,
@@ -291,7 +298,8 @@ function escapeRegexPathChars(s: string): string {
 }
 
 /**
- * True if pathname is hidden by a single rule (prefix, `/a/:id`, `/a/*`, `/a/**`, etc.).
+ * True if pathname matches a single rule (prefix, `/a/:id`, `/a/*`, `/a/**`, etc.).
+ * Used for both "hide" and "show only on" (`embedVisiblePaths`) lists.
  */
 export function pathMatchesEmbedHiddenPattern(pathname: string, pattern: string): boolean {
   const path = pathname || '/';
@@ -464,6 +472,7 @@ export function mergeWidgetConfig(
       return Math.max(0, Math.min(120, Math.round(n)));
     })(),
     embedHiddenPaths: mergeEmbedHiddenPathsFromStored(c.embedHiddenPaths),
+    embedVisiblePaths: mergeEmbedHiddenPathsFromStored(c.embedVisiblePaths),
     embedHiddenSubdomains: mergeEmbedHiddenSubdomainsFromStored(c.embedHiddenSubdomains),
     widgetPathInsets: mergeWidgetPathInsetsFromStored(c.widgetPathInsets),
     proactiveWelcomeEnabled: (c.proactiveWelcomeEnabled as boolean) ?? DEFAULT_WIDGET_CONFIG.proactiveWelcomeEnabled,
@@ -495,6 +504,7 @@ export function widgetConfigToStorage(config: ChatbotWidgetConfig): Record<strin
     attachmentsEnabled: config.attachmentsEnabled,
     inactivityMinutes: config.inactivityMinutes,
     embedHiddenPaths: config.embedHiddenPaths ?? [],
+    embedVisiblePaths: config.embedVisiblePaths ?? [],
     embedHiddenSubdomains: mergeEmbedHiddenSubdomainsFromStored(config.embedHiddenSubdomains ?? []),
     widgetPathInsets: mergeWidgetPathInsetsFromStored(config.widgetPathInsets ?? []),
     proactiveWelcomeEnabled: config.proactiveWelcomeEnabled,

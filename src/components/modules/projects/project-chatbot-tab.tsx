@@ -57,6 +57,9 @@ export function ProjectChatbotTab({ projectId, initialChatbot }: ProjectChatbotT
   const [hiddenSubdomainsText, setHiddenSubdomainsText] = useState(() =>
     (mergeWidgetConfig(initialChatbot?.config).embedHiddenSubdomains ?? []).join('\n')
   );
+  const [visiblePathsText, setVisiblePathsText] = useState(() =>
+    (mergeWidgetConfig(initialChatbot?.config).embedVisiblePaths ?? []).join('\n')
+  );
   const [logoUploading, setLogoUploading] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const debouncedConfig = useDebouncedValue(config, PREVIEW_DEBOUNCE_MS);
@@ -74,6 +77,7 @@ export function ProjectChatbotTab({ projectId, initialChatbot }: ProjectChatbotT
     const merged = mergeWidgetConfig(chatbot.config);
     setConfig(merged);
     setHiddenPathsText((merged.embedHiddenPaths ?? []).join('\n'));
+    setVisiblePathsText((merged.embedVisiblePaths ?? []).join('\n'));
     setHiddenSubdomainsText((merged.embedHiddenSubdomains ?? []).join('\n'));
   }, [chatbot]);
 
@@ -507,6 +511,32 @@ export function ProjectChatbotTab({ projectId, initialChatbot }: ProjectChatbotT
               least 2 minutes.
             </p>
           </Field>
+          <Field label="Show widget only on these paths (optional)">
+            <Textarea
+              rows={3}
+              className="font-mono text-sm min-h-[72px]"
+              placeholder={'Leave empty = any path (except those hidden below).\nHomepage only: /'}
+              value={visiblePathsText}
+              onChange={(e) => {
+                const v = e.target.value;
+                setVisiblePathsText(v);
+                setConfig((prev) => ({
+                  ...prev,
+                  embedVisiblePaths: parseEmbedHiddenPathsFromTextarea(v),
+                }));
+              }}
+            />
+            <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+              When this box has <span className="font-medium text-foreground">any</span> lines, the embed loads{' '}
+              <span className="font-medium text-foreground">only</span> on URLs whose path matches at least one line (same
+              rules as &quot;Hide&quot;: plain prefixes, <code className="text-[11px]">*</code>,{' '}
+              <code className="text-[11px]">**</code>, <code className="text-[11px]">{'/**'}</code>, etc.). For{' '}
+              <span className="font-medium text-foreground">homepage only</span>, put a single line:{' '}
+              <code className="text-[11px]">/</code>. Leave empty to show on all paths (still respecting the hide list and
+              host rules). On single-page apps the embed re-checks when{' '}
+              <code className="text-[11px]">location.pathname</code> changes (short poll plus browser back/forward).
+            </p>
+          </Field>
           <Field label="Hide widget on these paths">
             <Textarea
               rows={5}
@@ -525,13 +555,14 @@ export function ProjectChatbotTab({ projectId, initialChatbot }: ProjectChatbotT
             <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
               One path per line. A plain prefix like <code className="text-[11px]">/checkout</code> hides{' '}
               <code className="text-[11px]">/checkout</code> and everything under it. Use{' '}
-              <code className="text-[11px]">/report/:id</code> or <code className="text-[11px]">/report/*</code> for one
+              <code className="text-[11px]">/report/:id</code> or <code className="text-[11px]">{'/report/*'}</code> for one
               dynamic segment (e.g. <code className="text-[11px]">/report/123</code>). Use{' '}
               <code className="text-[11px]">**</code> for multiple segments (e.g.{' '}
-              <code className="text-[11px]">/docs/**/print</code>). A trailing <code className="text-[11px]">/**</code>{' '}
+              <code className="text-[11px]">{'/docs/**/print'}</code>). A trailing <code className="text-[11px]">{'/**'}</code>{' '}
               matches that path and all nested routes. Leading <code className="text-[11px]">/</code> is added if
-              omitted. On single-page apps the embed usually runs once per full load unless you reload it on route
-              changes.
+              omitted. On single-page apps the embed re-checks when{' '}
+              <code className="text-[11px]">location.pathname</code> changes (short poll plus browser back/forward); hash-only
+              routing without a pathname change is not detected.
             </p>
           </Field>
           <Field label="Hide widget on these hosts / subdomains">

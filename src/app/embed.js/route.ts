@@ -224,6 +224,7 @@ const EMBED_SCRIPT = `
     showPoweredBy: true,
     attachmentsEnabled: false,
     embedHiddenPaths: [],
+    embedVisiblePaths: [],
     embedHiddenSubdomains: [],
     widgetPathInsets: [],
     defaultRatingType: 'thumbs',
@@ -634,6 +635,7 @@ const EMBED_SCRIPT = `
     caiLastPathForInsets = path;
     caiRefreshEffectiveWidgetInsets();
     caiSyncChromeLayoutFromInsets();
+    caiReconcileEmbedVisibility();
   }
   function caiStartWidgetPathInsetWatch() {
     if (caiPathPollTimer) {
@@ -645,7 +647,9 @@ const EMBED_SCRIPT = `
     } catch (eInit) {
       caiLastPathForInsets = '/';
     }
-    if (!config.widgetPathInsets || !config.widgetPathInsets.length) return;
+    var needsPathWatch =
+      (config.widgetPathInsets && config.widgetPathInsets.length > 0) || caiPathVisibilityRulesActive();
+    if (!needsPathWatch) return;
     if (!caiPathRoutingBound) {
       window.addEventListener('popstate', caiOnWidgetPathMaybeChanged);
       caiPathRoutingBound = true;
@@ -819,12 +823,25 @@ const EMBED_SCRIPT = `
     return out;
   }
   function caiShouldHideEmbed() {
+    var path = '/';
+    try {
+      path = window.location && window.location.pathname ? window.location.pathname : '/';
+    } catch (ePath0) {}
+    var allow = config.embedVisiblePaths;
+    if (allow && allow.length) {
+      var matchedAllow = false;
+      for (var ai = 0; ai < allow.length; ai++) {
+        var ap = allow[ai];
+        if (!ap || typeof ap !== 'string') continue;
+        if (caiPathMatchesEmbedHiddenPattern(path, ap)) {
+          matchedAllow = true;
+          break;
+        }
+      }
+      if (!matchedAllow) return true;
+    }
     var list = config.embedHiddenPaths;
     if (list && list.length) {
-      var path = '/';
-      try {
-        path = window.location && window.location.pathname ? window.location.pathname : '/';
-      } catch (ePath) {}
       for (var i = 0; i < list.length; i++) {
         var p = list[i];
         if (!p || typeof p !== 'string') continue;
@@ -849,6 +866,90 @@ const EMBED_SCRIPT = `
       }
     }
     return false;
+  }
+
+  function caiPathVisibilityRulesActive() {
+    return (
+      (config.embedHiddenPaths && config.embedHiddenPaths.length > 0) ||
+      (config.embedVisiblePaths && config.embedVisiblePaths.length > 0)
+    );
+  }
+
+  /** Remove widget DOM and reset client state when path rules hide the embed (SPA navigations). */
+  function caiTeardownEmbedUi() {
+    hideProactiveWelcome();
+    hideReplyPendingIndicator();
+    hideHumanTypingIndicator();
+    clearInactivityTimers();
+    stopHandoffPolling();
+    tearDownHandoffWebRtc();
+    try {
+      if (voiceSilenceIntervalId) {
+        clearInterval(voiceSilenceIntervalId);
+        voiceSilenceIntervalId = null;
+      }
+    } catch (eVs) {}
+    if (voiceRecorder && voiceRecorder.state !== 'inactive') {
+      try {
+        voiceRecorder.stop();
+      } catch (eRec) {}
+    }
+    voiceRecorder = null;
+    if (voiceStream) {
+      try {
+        voiceStream.getTracks().forEach(function (t) {
+          t.stop();
+        });
+      } catch (eSt) {}
+      voiceStream = null;
+    }
+    if (voiceAudioCtx) {
+      try {
+        voiceAudioCtx.close();
+      } catch (eCtx) {}
+      voiceAudioCtx = null;
+    }
+    voiceAnalyser = null;
+    voiceChunks = [];
+    voiceIsRecording = false;
+    voiceHasSpeech = false;
+    voiceSilenceStart = null;
+    voiceDiscardChunks = false;
+    voiceTranscribePending = false;
+    voiceSendPending = false;
+    stopVoiceAgentOutput();
+    removeEndedFlow();
+    if (root && root.parentNode) {
+      try {
+        root.parentNode.removeChild(root);
+      } catch (eRm) {}
+    }
+    root = null;
+    panel = null;
+    listEl = null;
+    conversationId = null;
+    messages = [];
+    conversationEnded = false;
+    endedConversationId = null;
+    ratingSubmitted = false;
+    handoffMode = false;
+    assignedHumanAgentId = null;
+    caiReplyPendingEl = null;
+    caiHumanTypingEl = null;
+    handoffStatusEl = null;
+    voiceLabelEl = null;
+    voiceBtnEl = null;
+    liveVoiceConnected = false;
+  }
+
+  function caiReconcileEmbedVisibility() {
+    if (!caiPathVisibilityRulesActive()) return;
+    var hide = caiShouldHideEmbed();
+    if (hide) {
+      if (root) caiTeardownEmbedUi();
+    } else if (!root) {
+      render();
+    }
   }
 
   /** Inline SVGs aligned with dashboard ChatbotPreview (Lucide v0.574 paths, ISC). */
@@ -2398,6 +2499,9 @@ const EMBED_SCRIPT = `
         if (Array.isArray(c.embedHiddenPaths)) {
           config.embedHiddenPaths = caiNormalizeEmbedHiddenPathsFromServer(c.embedHiddenPaths);
         }
+        if (Array.isArray(c.embedVisiblePaths)) {
+          config.embedVisiblePaths = caiNormalizeEmbedHiddenPathsFromServer(c.embedVisiblePaths);
+        }
         if (Array.isArray(c.embedHiddenSubdomains)) {
           config.embedHiddenSubdomains = caiNormalizeEmbedHiddenSubdomainsFromServer(c.embedHiddenSubdomains);
         }
@@ -2407,6 +2511,7 @@ const EMBED_SCRIPT = `
       }
     }
     caiRefreshEffectiveWidgetInsets();
+    caiStartWidgetPathInsetWatch();
     if (caiShouldHideEmbed()) {
       return;
     }
@@ -2419,7 +2524,6 @@ const EMBED_SCRIPT = `
       } catch (e) {}
     })();
     render();
-    caiStartWidgetPathInsetWatch();
     if (openPanelOnLoad) openPanel();
     if (config.proactiveWelcomeEnabled && !openPanelOnLoad) {
       var delayMs = (config.proactiveWelcomeDelaySeconds || 0) * 1000;
