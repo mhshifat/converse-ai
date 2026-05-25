@@ -1,12 +1,10 @@
 <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Blue rounded background -->
-  <rect width="32" height="32" rx="8" fill="#2563eb"/>
-  <!-- Chat bubble body (white) — same geometry as AppLogo -->
-  <path d="M5 6 H27 A3 3 0 0 1 30 9 V21 A3 3 0 0 1 27 24 H13 L7 29 V24 H5 A3 3 0 0 1 2 21 V9 A3 3 0 0 1 5 6 Z" fill="white"/>
-  <!-- Potoo eyes -->
-  <circle cx="12" cy="14" r="3.6" fill="#2563eb"/>
+  <!-- Chat bubble body — same geometry as AppLogo, no surrounding square -->
+  <path d="M5 6 H27 A3 3 0 0 1 30 9 V21 A3 3 0 0 1 27 24 H13 L7 29 V24 H5 A3 3 0 0 1 2 21 V9 A3 3 0 0 1 5 6 Z" fill="#2563eb"/>
+  <!-- Potoo eyes: white sclera + dark pupil -->
+  <circle cx="12" cy="14" r="3.6" fill="#ffffff"/>
   <circle cx="12" cy="14" r="1.5" fill="#111111"/>
-  <circle cx="22" cy="14" r="3.6" fill="#2563eb"/>
+  <circle cx="22" cy="14" r="3.6" fill="#ffffff"/>
   <circle cx="22" cy="14" r="1.5" fill="#111111"/>
   <!-- Beak -->
   <path d="M17 18 L15.5 20.5 L18.5 20.5 Z" fill="#f59e0b"/>

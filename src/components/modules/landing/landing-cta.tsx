@@ -73,7 +73,7 @@ export function LandingCta() {
                   asChild
                   className="border-white/30 text-white hover:bg-white/10 hover:text-white rounded-full px-8 h-12 text-base bg-transparent"
                 >
-                  <Link href="/login">Talk to Sales</Link>
+                  <a href="#faq">See FAQ</a>
                 </Button>
               </div>
             </AnimateOnScroll>

@@ -3,10 +3,10 @@ import { getValidatedSessionUser } from '@/server/session-validation';
 import { buildMetadata } from '@/lib/seo';
 import { LandingHeader } from '@/components/modules/landing/landing-header';
 import { LandingHero } from '@/components/modules/landing/landing-hero';
-import { LandingLogos } from '@/components/modules/landing/landing-logos';
 import { LandingFeatures } from '@/components/modules/landing/landing-features';
 import { LandingHowItWorks } from '@/components/modules/landing/landing-how-it-works';
-import { LandingStats } from '@/components/modules/landing/landing-stats';
+import { LandingPlayground } from '@/components/modules/landing/landing-playground';
+import { LandingFaq } from '@/components/modules/landing/landing-faq';
 import { LandingCta } from '@/components/modules/landing/landing-cta';
 import { LandingFooter } from '@/components/modules/landing/landing-footer';
 import { JsonLdWebsite } from '@/components/shared/json-ld-website';
@@ -28,10 +28,10 @@ export default async function HomePage() {
       <main className="relative min-h-screen overflow-hidden">
         <LandingHeader isAuthenticated={isAuthenticated} />
       <LandingHero />
-      <LandingLogos />
       <LandingFeatures />
       <LandingHowItWorks />
-      <LandingStats />
+      <LandingPlayground />
+      <LandingFaq />
       <LandingCta />
       <LandingFooter />
       </main>

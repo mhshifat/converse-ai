@@ -1,5 +1,5 @@
 /**
- * Pluggable email sending. Swap implementation via EMAIL_PROVIDER env (e.g. 'nodemailer' | 'resend').
+ * Pluggable email sending. Swap implementation via EMAIL_PROVIDER env (e.g. 'nodemailer' | 'resend' | 'bytloop').
  * Credentials and server config come from env; integration config only supplies optional to/from overrides.
  */
 
@@ -96,6 +96,51 @@ class ResendEmailSender implements IEmailSender {
   }
 }
 
+/** Bytloop API sender – set EMAIL_PROVIDER=bytloop, BYTLOOP_MAIL_KEY, and BYTLOOP_MAIL_FROM (or EMAIL_FROM). */
+class BytloopEmailSender implements IEmailSender {
+  async send(options: SendEmailOptions): Promise<void> {
+    const key = process.env.BYTLOOP_MAIL_KEY;
+    if (!key) throw new Error('BYTLOOP_MAIL_KEY is not set');
+    const url = process.env.BYTLOOP_MAIL_URL ?? 'https://mail.bytloop.com/api/v1/emails';
+    const from =
+      options.from ?? process.env.BYTLOOP_MAIL_FROM ?? process.env.EMAIL_FROM ?? '';
+    if (!from) {
+      throw new Error(
+        "Bytloop: no 'from' address — set BYTLOOP_MAIL_FROM or EMAIL_FROM env var"
+      );
+    }
+    // Bytloop's click tracker host has been observed pointing at localhost in
+    // some deployments, silently breaking every link. Disabled by default; set
+    // BYTLOOP_TRACK_CLICKS=true to opt back in once their tracker is verified.
+    const trackClicks = process.env.BYTLOOP_TRACK_CLICKS === 'true';
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${key}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from,
+        to: [options.to],
+        subject: options.subject,
+        text: options.text,
+        html: options.html ?? options.text,
+        // Multiple field names because Bytloop's SDK versions are inconsistent
+        // about which one wins; sending all three is harmless.
+        trackClicks,
+        track_clicks: trackClicks,
+        tracking: { clicks: trackClicks, opens: trackClicks },
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(
+        `Bytloop mail API error (${res.status} ${res.statusText}): ${err || '<empty body>'}`
+      );
+    }
+  }
+}
+
 let cachedSender: IEmailSender | null = null;
 
 export function getEmailSender(): IEmailSender {
@@ -103,6 +148,8 @@ export function getEmailSender(): IEmailSender {
   const provider = (process.env.EMAIL_PROVIDER ?? 'nodemailer').toLowerCase();
   if (provider === 'resend') {
     cachedSender = new ResendEmailSender();
+  } else if (provider === 'bytloop') {
+    cachedSender = new BytloopEmailSender();
   } else {
     cachedSender = new NodemailerEmailSender();
   }
