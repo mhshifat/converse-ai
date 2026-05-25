@@ -3,7 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
-import { ConverseLogo } from '@/components/shared/converse-logo';
+import { AppLogo } from '@/components/shared/app-logo';
+import { APP_NAME } from '@/lib/app-branding';
 import { Button } from '@/components/ui/button';
 import { Menu, X } from 'lucide-react';
 
@@ -38,9 +39,9 @@ export function LandingHeader({ isAuthenticated = false }: LandingHeaderProps) {
     >
       <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4 lg:px-8">
         <Link href="/" className="flex items-center gap-2.5 group">
-          <ConverseLogo size={30} animated />
+          <AppLogo size={30} animated />
           <span className="text-lg font-bold tracking-tight text-gray-900">
-            Converse<span className="text-blue-600">AI</span>
+            {APP_NAME}
           </span>
         </Link>
 

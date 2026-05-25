@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getChatbotByApiKey } from '@/server/services/conversation-service';
 import { getUploadService } from '@/server/upload/upload-service';
 import { WIDGET_CHAT_UNAVAILABLE } from '@/server/widget-customer-messages';
+import { APP_SLUG } from '@/lib/app-branding';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 const ALLOWED_TYPES = [
@@ -53,7 +54,7 @@ export async function POST(request: Request) {
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
     const result = await uploadService.upload(buffer, file.name, {
-      folder: 'converseai-widget',
+      folder: `${APP_SLUG}-widget`,
     });
     return NextResponse.json({ url: result.url });
   } catch (err) {

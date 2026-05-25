@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { Bot, User } from 'lucide-react';
+import { APP_NAME } from '@/lib/app-branding';
 
 const MESSAGES = [
   { role: 'agent', text: "Hi! I'm your AI assistant. How can I help you today?", delay: '0.6s' },
@@ -24,7 +25,7 @@ export function HeroChatMockup() {
             <span className="w-2.5 h-2.5 rounded-full bg-green-400" />
           </div>
           <div className="flex-1 text-center">
-            <span className="text-xs font-medium text-gray-500">ConverseAI Chat</span>
+            <span className="text-xs font-medium text-gray-500">{APP_NAME} Chat</span>
           </div>
           <div className="w-12" />
         </div>

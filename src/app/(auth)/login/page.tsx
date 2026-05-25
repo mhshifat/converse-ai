@@ -3,11 +3,12 @@ import { cookies } from 'next/headers';
 import { buildMetadata } from '@/lib/seo';
 import { LoginForm } from '@/components/modules/auth/login-form';
 import { SignupBrandPanel } from '@/components/modules/auth/signup-brand-panel';
+import { APP_NAME } from '@/lib/app-branding';
 
 export const metadata = buildMetadata({
   path: '/login',
   title: 'Sign In',
-  description: 'Sign in to your ConverseAI account.',
+  description: `Sign in to your ${APP_NAME} account.`,
   noIndex: true,
 });
 

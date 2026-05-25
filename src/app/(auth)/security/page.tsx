@@ -1,10 +1,11 @@
 import Link from 'next/link';
 import { buildMetadata } from '@/lib/seo';
+import { APP_NAME } from '@/lib/app-branding';
 
 export const metadata = buildMetadata({
   path: '/security',
   title: 'Security',
-  description: 'How ConverseAI protects your data and our security practices.',
+  description: `How ${APP_NAME} protects your data and our security practices.`,
 });
 
 export default function SecurityPage() {

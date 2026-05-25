@@ -47,6 +47,7 @@ import {
 import { cn } from '@/lib/utils';
 import { DashboardBackground } from './dashboard-bg';
 import { toast } from 'sonner';
+import { APP_NAME } from '@/lib/app-branding';
 import {
   isNotificationSoundEnabled,
   setNotificationSoundEnabled,
@@ -278,7 +279,7 @@ export function DashboardShell({ userEmail, children }: DashboardShellProps) {
                       <span className="block truncate text-sm font-semibold tracking-tight text-foreground">
                         {currentProject?.name ?? 'Project'}
                       </span>
-                      <span className="block text-[11px] text-muted-foreground">Converse</span>
+                      <span className="block text-[11px] text-muted-foreground">{APP_NAME}</span>
                     </div>
                     <ChevronDown className="size-4 shrink-0 text-muted-foreground opacity-60 group-hover/header:opacity-100" />
                   </button>

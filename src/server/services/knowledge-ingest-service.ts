@@ -3,6 +3,9 @@ import mammoth from 'mammoth';
 import * as XLSX from 'xlsx';
 import * as projectKnowledgeRepo from '../repositories/project-knowledge-repository';
 import * as ragIndexingService from './rag-indexing-service';
+import { APP_NAME } from '../../lib/app-branding';
+
+const KNOWLEDGE_USER_AGENT = `${APP_NAME}-KnowledgeBot/1.0`;
 
 const MAX_TEXT_LENGTH = 120_000;
 
@@ -158,7 +161,7 @@ export async function ingestUrl(
       method: 'GET',
       headers: {
         Accept: 'text/html,application/xhtml+xml',
-        'User-Agent': 'ConverseAI-KnowledgeBot/1.0',
+        'User-Agent': KNOWLEDGE_USER_AGENT,
       },
       signal: controller.signal,
     });
@@ -234,7 +237,7 @@ export async function reIngestById(
         method: 'GET',
         headers: {
           Accept: 'text/html,application/xhtml+xml',
-          'User-Agent': 'ConverseAI-KnowledgeBot/1.0',
+          'User-Agent': KNOWLEDGE_USER_AGENT,
         },
         signal: controller.signal,
       });

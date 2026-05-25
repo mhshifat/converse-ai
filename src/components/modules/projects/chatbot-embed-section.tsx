@@ -6,6 +6,7 @@ import { trpc } from '@/utils/trpc';
 import { Button } from '@/components/ui/button';
 import { Copy, RefreshCw, CheckCircle2, XCircle, Loader2, Globe } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { APP_NAME, APP_SLUG } from '@/lib/app-branding';
 
 interface ChatbotEmbedSectionProps {
   projectId: string;
@@ -50,7 +51,7 @@ export function ChatbotEmbedSection({ projectId }: ChatbotEmbedSectionProps) {
   const embedSnippet =
     chatbot?.apiKey &&
     origin &&
-    `<!-- ConverseAI Chat Widget -->
+    `<!-- ${APP_NAME} Chat Widget -->
 <script>
   (function(w,d,s,id){
     var js = d.getElementsByTagName(s)[0];
@@ -59,7 +60,7 @@ export function ChatbotEmbedSection({ projectId }: ChatbotEmbedSectionProps) {
     js.src = "${origin}/embed.js";
     js.dataset.apiKey = "${chatbot.apiKey}";
     w.document.head.appendChild(js);
-  })(window, document, 'script', 'converseai-widget');
+  })(window, document, 'script', '${APP_SLUG}-widget');
 </script>`;
 
   const handleCopyEmbed = () => {
@@ -142,7 +143,7 @@ export function ChatbotEmbedSection({ projectId }: ChatbotEmbedSectionProps) {
               <p className="text-xs text-muted-foreground">Refreshing…</p>
             ) : null}
             <p className="text-xs text-muted-foreground pt-1 max-w-lg">
-              Config check hits ConverseAI only. Live-site detection uses a one-line beacon when the
+              Config check hits {APP_NAME} only. Live-site detection uses a one-line beacon when the
               script loads on a real page (see below).
             </p>
           </div>

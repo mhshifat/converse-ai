@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getValidatedSessionUser } from '@/server/session-validation';
 import { getUploadService } from '@/server/upload/upload-service';
+import { APP_SLUG } from '@/lib/app-branding';
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MB for logos
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
@@ -39,7 +40,7 @@ export async function POST(request: Request) {
 
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
-    const result = await uploadService.upload(buffer, file.name, { folder: 'converseai-logos' });
+    const result = await uploadService.upload(buffer, file.name, { folder: `${APP_SLUG}-logos` });
     return NextResponse.json({ url: result.url });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Upload failed';

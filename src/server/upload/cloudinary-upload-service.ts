@@ -1,6 +1,7 @@
 import { Readable } from 'stream';
 import { v2 as cloudinary } from 'cloudinary';
 import type { IUploadService, UploadResult } from './upload-service';
+import { APP_SLUG } from '../../lib/app-branding';
 
 /**
  * Cloudinary implementation of IUploadService.
@@ -29,7 +30,7 @@ export class CloudinaryUploadService implements IUploadService {
     options?: { folder?: string }
   ): Promise<UploadResult> {
     return new Promise((resolve, reject) => {
-      const folder = options?.folder ?? 'converseai-logos';
+      const folder = options?.folder ?? `${APP_SLUG}-logos`;
       const stream = cloudinary.uploader.upload_stream(
         {
           folder,

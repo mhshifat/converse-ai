@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { APP_NAME } from '../../lib/app-branding';
 
 export interface EmailDeliveryConfig {
   from?: string;
@@ -21,7 +22,7 @@ export interface EmailDeliveryConfig {
 export async function sendCompiledDataEmail(
   config: EmailDeliveryConfig,
   data: Record<string, unknown>,
-  subject = 'ConverseAI: Conversation data'
+  subject = `${APP_NAME}: Conversation data`
 ): Promise<void> {
   const to = config.to ?? config.from;
   if (!to) {

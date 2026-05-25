@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { ArrowRight } from 'lucide-react';
 import { AnimateOnScroll } from './animate-on-scroll';
+import { APP_NAME } from '@/lib/app-branding';
 
 export function LandingCta() {
   return (
@@ -50,7 +51,7 @@ export function LandingCta() {
             </AnimateOnScroll>
             <AnimateOnScroll delay={1}>
               <p className="mt-5 text-lg text-blue-100 max-w-xl mx-auto">
-                Join thousands of businesses using ConverseAI to automate support,
+                Join thousands of businesses using {APP_NAME} to automate support,
                 increase conversions, and delight their customers.
               </p>
             </AnimateOnScroll>

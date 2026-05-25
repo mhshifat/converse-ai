@@ -1,4 +1,6 @@
-const STORAGE_KEY = 'converse_notification_sound';
+import { APP_SLUG } from './app-branding';
+
+const STORAGE_KEY = `${APP_SLUG}_notification_sound`;
 
 export function isNotificationSoundEnabled(): boolean {
   if (typeof window === 'undefined') return true;

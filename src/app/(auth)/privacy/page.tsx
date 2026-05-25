@@ -1,10 +1,11 @@
 import Link from 'next/link';
 import { buildMetadata } from '@/lib/seo';
+import { APP_NAME } from '@/lib/app-branding';
 
 export const metadata = buildMetadata({
   path: '/privacy',
   title: 'Privacy Policy',
-  description: 'How ConverseAI collects, uses, and protects your personal information.',
+  description: `How ${APP_NAME} collects, uses, and protects your personal information.`,
 });
 
 export default function PrivacyPage() {

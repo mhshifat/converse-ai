@@ -1,6 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
-import { ConverseLogo } from '@/components/shared/converse-logo';
+import { AppLogo } from '@/components/shared/app-logo';
+import { APP_NAME } from '@/lib/app-branding';
 
 const FOOTER_LINKS = {
   Product: [
@@ -56,9 +57,9 @@ export function LandingFooter() {
           {/* Brand column */}
           <div className="col-span-2">
             <Link href="/" className="inline-flex items-center gap-2.5 mb-4">
-              <ConverseLogo size={28} animated className="text-gray-200" />
+              <AppLogo size={28} animated className="text-gray-200" />
               <span className="text-lg font-bold text-white tracking-tight">
-                Converse<span className="text-blue-400">AI</span>
+                {APP_NAME}
               </span>
             </Link>
             <p className="text-sm text-gray-500 leading-relaxed max-w-xs mb-6">
@@ -106,7 +107,7 @@ export function LandingFooter() {
         {/* Bottom bar */}
         <div className="mt-14 pt-8 border-t border-gray-800 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-xs text-gray-500">
-            &copy; {currentYear} ConverseAI. All rights reserved.
+            &copy; {currentYear} {APP_NAME}. All rights reserved.
           </p>
           <div className="flex items-center gap-1 text-xs text-gray-600">
             <span>Built with</span>

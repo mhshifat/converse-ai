@@ -1,10 +1,11 @@
 import Link from 'next/link';
 import { buildMetadata } from '@/lib/seo';
+import { APP_NAME } from '@/lib/app-branding';
 
 export const metadata = buildMetadata({
   path: '/terms',
   title: 'Terms of Service',
-  description: 'Terms and conditions for using ConverseAI services.',
+  description: `Terms and conditions for using ${APP_NAME} services.`,
 });
 
 export default function TermsPage() {
@@ -24,7 +25,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-lg font-semibold text-foreground">1. Acceptance of terms</h2>
             <p className="mt-2 text-sm leading-relaxed">
-              By accessing or using ConverseAI, you agree to these Terms of Service and our Privacy Policy. If you do not agree, do not use our services.
+              By accessing or using {APP_NAME}, you agree to these Terms of Service and our Privacy Policy. If you do not agree, do not use our services.
             </p>
           </section>
           <section>

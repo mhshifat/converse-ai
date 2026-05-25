@@ -1,10 +1,11 @@
 import Link from 'next/link';
 import { buildMetadata } from '@/lib/seo';
+import { APP_NAME } from '@/lib/app-branding';
 
 export const metadata = buildMetadata({
   path: '/cookies',
   title: 'Cookie Policy',
-  description: 'How ConverseAI uses cookies and similar technologies.',
+  description: `How ${APP_NAME} uses cookies and similar technologies.`,
 });
 
 export default function CookiePolicyPage() {

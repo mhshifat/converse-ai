@@ -1,12 +1,13 @@
 import type { Metadata } from 'next';
+import { APP_NAME } from './app-branding';
 
 /**
  * Single source of truth for SEO across the app.
  * Use buildMetadata() in layout/page for consistent titles, descriptions, and OG/Twitter tags.
  */
 
-const siteName = 'ConverseAI';
-const defaultTitle = 'ConverseAI – Build AI Chatbots That Actually Convert';
+const siteName = APP_NAME;
+const defaultTitle = `${APP_NAME} – Build AI Chatbots That Actually Convert`;
 const defaultDescription =
   'Deploy intelligent, voice-enabled AI chatbots that understand your business, engage customers in natural conversation, and seamlessly hand off to human agents.';
 

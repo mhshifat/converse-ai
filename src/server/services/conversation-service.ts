@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { APP_NAME } from '@/lib/app-branding';
 import { AgentProviderFactory } from '@/adapters/agent-provider-factory';
 import { GroqAgentProvider } from '@/adapters/groq-agent-provider';
 import { getDefaultAgentForProject } from '../repositories/project-agent-repository';
@@ -649,7 +650,7 @@ export async function endConversation(conversationId: string) {
   const deliveryIds = (project.delivery_integration_ids ?? []) as string[];
   if (deliveryIds.length === 0) {
     console.warn(
-      '[ConverseAI] Conversation ended but no delivery integrations are enabled for this project. To receive compiled data (e.g. by email), enable one in Project → Integrations → Delivery integrations and save.'
+      `[${APP_NAME}] Conversation ended but no delivery integrations are enabled for this project. To receive compiled data (e.g. by email), enable one in Project → Integrations → Delivery integrations and save.`
     );
   }
 
@@ -700,7 +701,7 @@ export async function endConversation(conversationId: string) {
         );
       } catch (err) {
         console.error(
-          `[ConverseAI] Delivery failed for integration ${integration.id} (${integration.type}):`,
+          `[${APP_NAME}] Delivery failed for integration ${integration.id} (${integration.type}):`,
           err instanceof Error ? err.message : err
         );
       }
@@ -716,7 +717,7 @@ export async function endConversation(conversationId: string) {
 
 /** Sample payload for test delivery. */
 const TEST_DELIVERY_DATA: Record<string, unknown> = {
-  summary: 'Test message from ConverseAI. If you received this, your delivery integration is working.',
+  summary: `Test message from ${APP_NAME}. If you received this, your delivery integration is working.`,
   messageCount: 0,
   name: 'Test User',
   email: 'test@example.com',
@@ -767,7 +768,7 @@ export async function sendTestDelivery(
       const msg = err instanceof Error ? err.message : String(err);
       errors.push(`${integration.type}: ${msg}`);
       console.error(
-        `[ConverseAI] Test delivery failed for integration ${integration.id} (${integration.type}):`,
+        `[${APP_NAME}] Test delivery failed for integration ${integration.id} (${integration.type}):`,
         msg
       );
     }
@@ -826,7 +827,7 @@ async function extractDataWithLLM(
     }
     return result;
   } catch (err) {
-    console.warn('[ConverseAI] LLM extraction failed, using heuristic:', err instanceof Error ? err.message : err);
+    console.warn(`[${APP_NAME}] LLM extraction failed, using heuristic:`, err instanceof Error ? err.message : err);
     return null;
   }
 }
@@ -935,7 +936,7 @@ async function deliverCompiledData(
       null;
     if (!to) {
       console.warn(
-        '[ConverseAI] Email delivery skipped: no recipient. Set "to" on the email integration, DELIVERY_EMAIL_TO in server env, or ensure a user exists in this tenant.'
+        `[${APP_NAME}] Email delivery skipped: no recipient. Set "to" on the email integration, DELIVERY_EMAIL_TO in server env, or ensure a user exists in this tenant.`
       );
       return;
     }
@@ -943,7 +944,7 @@ async function deliverCompiledData(
     await getEmailSender().send({
       to,
       from: config.from as string | undefined,
-      subject: 'ConverseAI: Conversation data',
+      subject: `${APP_NAME}: Conversation data`,
       text: body,
       html: `<pre style="font-family:sans-serif;white-space:pre-wrap;">${escapeHtml(body)}</pre>`,
     });

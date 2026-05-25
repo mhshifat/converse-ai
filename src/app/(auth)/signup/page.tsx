@@ -2,11 +2,12 @@ import { cookies } from 'next/headers';
 import { buildMetadata } from '@/lib/seo';
 import { SignUpForm } from '@/components/modules/auth/sign-up-form';
 import { SignupBrandPanel } from '@/components/modules/auth/signup-brand-panel';
+import { APP_NAME } from '@/lib/app-branding';
 
 export const metadata = buildMetadata({
   path: '/signup',
   title: 'Sign Up',
-  description: 'Create your ConverseAI account and start building AI chatbots.',
+  description: `Create your ${APP_NAME} account and start building AI chatbots.`,
   noIndex: true,
 });
 

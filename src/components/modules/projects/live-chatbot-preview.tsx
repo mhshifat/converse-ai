@@ -18,7 +18,8 @@ import {
   PhoneOff,
 } from 'lucide-react';
 import { clampWidgetPositionOffsetPx, type ChatbotWidgetConfig } from '@/lib/chatbot-widget-config';
-import { ConverseLogo } from '@/components/shared/converse-logo';
+import { AppLogo } from '@/components/shared/app-logo';
+import { APP_NAME, APP_HOMEPAGE_URL } from '@/lib/app-branding';
 import { cn } from '@/lib/utils';
 import { trpc } from '@/utils/trpc';
 import { ChatMarkdown } from '@/components/modules/chat/chat-markdown';
@@ -1136,7 +1137,7 @@ export function LiveChatbotPreview({
                       className="flex shrink-0 items-center justify-center rounded bg-foreground text-background"
                       style={{ width: logoSize, height: logoSize }}
                     >
-                      <ConverseLogo size={logoSize * 0.6} className="[&_svg]:text-background" />
+                      <AppLogo size={logoSize * 0.6} className="[&_svg]:text-background" />
                     </span>
                   )}
                   <div className="min-w-0">
@@ -1615,12 +1616,12 @@ export function LiveChatbotPreview({
                 {config.showPoweredBy && (
                   <p className="mt-2 text-center">
                     <a
-                      href="https://converseai.com"
+                      href={APP_HOMEPAGE_URL}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-[10px] text-muted-foreground hover:text-foreground hover:underline"
                     >
-                      Powered by ConverseAI
+                      Powered by {APP_NAME}
                     </a>
                   </p>
                 )}

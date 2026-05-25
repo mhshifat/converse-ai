@@ -17,7 +17,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { ConverseLogo } from '@/components/shared/converse-logo';
+import { AppLogo } from '@/components/shared/app-logo';
 import Link from 'next/link';
 
 const schema = z.object({
@@ -227,7 +227,7 @@ export function LoginForm({ lastAuthProvider }: LoginFormProps = {}) {
   return (
     <div className="w-full max-w-sm mx-auto">
       <div className="flex justify-center mb-6 lg:hidden">
-        <ConverseLogo size={36} animated />
+        <AppLogo size={36} animated />
       </div>
 
       <h2 className="text-xl font-semibold tracking-tight text-center lg:text-left">

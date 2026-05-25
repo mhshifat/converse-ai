@@ -1,6 +1,7 @@
 import { nanoid } from 'nanoid';
 import nodemailer from 'nodemailer';
 import { prisma } from '../../lib/prisma';
+import { APP_NAME } from '../../lib/app-branding';
 
 const VERIFICATION_TYPE = 'email_verification';
 const TOKEN_EXPIRY_HOURS = 24;
@@ -74,7 +75,7 @@ export async function sendVerificationEmail(email: string, token: string): Promi
     await transporter.sendMail({
       from,
       to: email,
-      subject: 'Verify your email - ConverseAI',
+      subject: `Verify your email - ${APP_NAME}`,
       text: `Please verify your email by opening this link:\n\n${verifyUrl}\n\nThis link expires in ${TOKEN_EXPIRY_HOURS} hours.`,
       html: `
         <p>Please verify your email by clicking the link below:</p>

@@ -7,7 +7,8 @@ import { trpc } from '@/utils/trpc';
 import { Button } from '@/components/ui/button';
 import { ProjectIcon } from '@/lib/project-icons';
 import { CreateProjectDialog } from '@/components/modules/projects/create-project-dialog';
-import { ConverseLogo } from '@/components/shared/converse-logo';
+import { AppLogo } from '@/components/shared/app-logo';
+import { APP_NAME } from '@/lib/app-branding';
 import { Plus, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -43,13 +44,13 @@ export function PrimarySidebar() {
             <Link
               href="/dashboard"
               className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-foreground text-background shadow-sm transition-colors hover:bg-foreground/90"
-              aria-label="Converse home"
+              aria-label={`${APP_NAME} home`}
             >
-              <ConverseLogo size={20} className="[&_svg]:text-background" />
+              <AppLogo size={20} className="[&_svg]:text-background" />
             </Link>
           </TooltipTrigger>
           <TooltipContent side="right" className="text-xs">
-            Converse
+            {APP_NAME}
           </TooltipContent>
         </Tooltip>
         {isLoading ? (

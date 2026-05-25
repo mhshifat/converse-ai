@@ -1,5 +1,5 @@
 /**
- * Generates app/favicon.ico from app/icon.svg (Converse logo).
+ * Generates app/favicon.ico from app/icon.svg (Chatpoto logo).
  * Run from web/: node scripts/generate-favicon.mjs
  * Requires: npm install -D sharp to-ico
  */

@@ -1,10 +1,18 @@
 import { NextRequest } from 'next/server';
+import { APP_NAME, APP_SLUG, APP_HOMEPAGE_URL } from '@/lib/app-branding';
 
 const EMBED_SCRIPT = `
 (function() {
   var script = document.currentScript;
   var apiKey = script && (script.getAttribute('data-api-key') || script.dataset.apiKey);
   if (!apiKey) return;
+  var CAI_APP_NAME = __CAI_APP_NAME__;
+  var CAI_APP_SLUG = __CAI_APP_SLUG__;
+  var CAI_HOMEPAGE = __CAI_HOMEPAGE__;
+  var CAI_CID_KEY = CAI_APP_SLUG + '_cid';
+  var CAI_WELCOME_KEY = CAI_APP_SLUG + '_welcome_shown';
+  var CAI_STYLES_ID = CAI_APP_SLUG + '-widget-styles';
+  var CAI_ROOT_ID = CAI_APP_SLUG + '-root';
   var baseUrl =
     (script && (script.getAttribute('data-base-url') || script.dataset.baseUrl)) ||
     (script && script.src
@@ -18,9 +26,9 @@ const EMBED_SCRIPT = `
   var openPanelOnLoad = script && (script.getAttribute('data-open-panel') === 'true' || script.dataset.openPanel === 'true');
   var playgroundCustomerId = script && (script.getAttribute('data-customer-id') || script.dataset.customerId);
 
-  var customerId = playgroundCustomerId || ('cv_' + (sessionStorage.getItem('converseai_cid') || (function() {
+  var customerId = playgroundCustomerId || ('cv_' + (sessionStorage.getItem(CAI_CID_KEY) || (function() {
     var id = 'v_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
-    sessionStorage.setItem('converseai_cid', id);
+    sessionStorage.setItem(CAI_CID_KEY, id);
     return id;
   })()));
 
@@ -984,8 +992,8 @@ const EMBED_SCRIPT = `
     thumbUp: '<path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8.99a2 2 0 0 1-1.94 1.45H10a2 2 0 0 1-2-2v-7"/>',
     thumbDown: '<path d="M17 14V2"/><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8.99A2 2 0 0 1 6.15 2H14a2 2 0 0 1 2 2v7"/>'
   };
-  /** Converse mark (same geometry as shared/converse-logo.tsx); white on dark square like ChatbotPreview. */
-  function appendConverseMarkLogo(logoBox, iconPx) {
+  /** App mark (same geometry as shared/app-logo.tsx): chat bubble + potoo eyes/beak. */
+  function appendAppMarkLogo(logoBox, iconPx) {
     var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('width', String(iconPx));
     svg.setAttribute('height', String(iconPx));
@@ -993,7 +1001,7 @@ const EMBED_SCRIPT = `
     svg.setAttribute('fill', 'none');
     svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
     svg.innerHTML =
-      '<rect x="4" y="6" width="12" height="8" rx="4" ry="4" fill="currentColor" fill-opacity="0.95"/><path d="M7 14.5 L5 18 L9 16 Z" fill="currentColor" fill-opacity="0.95"/><circle cx="16" cy="12" r="2.25" fill="currentColor" fill-opacity="0.9"/><rect x="18" y="14" width="10" height="6" rx="3" ry="3" fill="currentColor" fill-opacity="0.85"/><path d="M22 14.5 L20 11 L24 13 Z" fill="currentColor" fill-opacity="0.85"/>';
+      '<path d="M5 6 H27 A3 3 0 0 1 30 9 V21 A3 3 0 0 1 27 24 H13 L7 29 V24 H5 A3 3 0 0 1 2 21 V9 A3 3 0 0 1 5 6 Z" fill="currentColor" fill-opacity="0.95"/><circle cx="12" cy="14" r="3.6" fill="#ffffff"/><circle cx="12" cy="14" r="1.5" fill="#111111"/><circle cx="22" cy="14" r="3.6" fill="#ffffff"/><circle cx="22" cy="14" r="1.5" fill="#111111"/><path d="M17 18 L15.5 20.5 L18.5 20.5 Z" fill="#f59e0b"/>';
     logoBox.appendChild(svg);
   }
   function caiEscapeHtml(s) {
@@ -1090,19 +1098,20 @@ const EMBED_SCRIPT = `
   }
 
   function injectStyles() {
-    if (document.getElementById('converseai-widget-styles')) return;
+    if (document.getElementById(CAI_STYLES_ID)) return;
     var style = document.createElement('style');
-    style.id = 'converseai-widget-styles';
+    style.id = CAI_STYLES_ID;
+    var rootSel = '#' + CAI_ROOT_ID;
     style.textContent =
-      '#converseai-root .cai-msg-user{animation: cai-in-u .3s ease-out both}#converseai-root .cai-msg-agent{animation: cai-in-a .3s ease-out both}@keyframes cai-in-u{from{opacity:0;transform:translateX(8px) scale(.96)}to{opacity:1;transform:translateX(0) scale(1)}}@keyframes cai-in-a{from{opacity:0;transform:translateX(-8px) scale(.96)}to{opacity:1;transform:translateX(0) scale(1)}}@keyframes cai-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.7;transform:scale(1.2)}}@keyframes cai-welcome-in{from{opacity:0;transform:translateY(12px) scale(0.96)}to{opacity:1;transform:translateY(0) scale(1)}}#converseai-root .cai-reply-pending-dots{display:flex;align-items:center;gap:4px}#converseai-root .cai-reply-pending-dots span{width:6px;height:6px;border-radius:50%;background:currentColor;opacity:0.35;animation:cai-dot-b 1.2s ease-in-out infinite}#converseai-root .cai-reply-pending-dots span:nth-child(2){animation-delay:0.15s}#converseai-root .cai-reply-pending-dots span:nth-child(3){animation-delay:0.3s}@keyframes cai-dot-b{0%,80%,100%{transform:translateY(0);opacity:0.35}40%{transform:translateY(-4px);opacity:1}}' +
-      '#converseai-root button[aria-label="Open chat"]{box-sizing:border-box;margin:0;padding:0;line-height:0;display:flex!important;align-items:center;justify-content:center;flex-shrink:0;transform-origin:center center;-webkit-appearance:none;appearance:none;touch-action:manipulation}' +
-      '#converseai-root button[aria-label="Open chat"] svg{display:block;flex-shrink:0;margin:0}';
+      rootSel + ' .cai-msg-user{animation: cai-in-u .3s ease-out both}' + rootSel + ' .cai-msg-agent{animation: cai-in-a .3s ease-out both}@keyframes cai-in-u{from{opacity:0;transform:translateX(8px) scale(.96)}to{opacity:1;transform:translateX(0) scale(1)}}@keyframes cai-in-a{from{opacity:0;transform:translateX(-8px) scale(.96)}to{opacity:1;transform:translateX(0) scale(1)}}@keyframes cai-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.7;transform:scale(1.2)}}@keyframes cai-welcome-in{from{opacity:0;transform:translateY(12px) scale(0.96)}to{opacity:1;transform:translateY(0) scale(1)}}' + rootSel + ' .cai-reply-pending-dots{display:flex;align-items:center;gap:4px}' + rootSel + ' .cai-reply-pending-dots span{width:6px;height:6px;border-radius:50%;background:currentColor;opacity:0.35;animation:cai-dot-b 1.2s ease-in-out infinite}' + rootSel + ' .cai-reply-pending-dots span:nth-child(2){animation-delay:0.15s}' + rootSel + ' .cai-reply-pending-dots span:nth-child(3){animation-delay:0.3s}@keyframes cai-dot-b{0%,80%,100%{transform:translateY(0);opacity:0.35}40%{transform:translateY(-4px);opacity:1}}' +
+      rootSel + ' button[aria-label="Open chat"]{box-sizing:border-box;margin:0;padding:0;line-height:0;display:flex!important;align-items:center;justify-content:center;flex-shrink:0;transform-origin:center center;-webkit-appearance:none;appearance:none;touch-action:manipulation}' +
+      rootSel + ' button[aria-label="Open chat"] svg{display:block;flex-shrink:0;margin:0}';
     document.head.appendChild(style);
   }
 
   var welcomeCardEl = null;
   function showProactiveWelcome() {
-    if (sessionStorage.getItem('converseai_welcome_shown') === '1') return;
+    if (sessionStorage.getItem(CAI_WELCOME_KEY) === '1') return;
     if (!root || welcomeCardEl || panel) return;
     var p = config.popup || {};
     var m = config.messages || {};
@@ -1133,7 +1142,7 @@ const EMBED_SCRIPT = `
     closeBtn.onmouseenter = function() { closeBtn.style.opacity = '1'; closeBtn.style.background = 'rgba(0,0,0,.06)'; };
     closeBtn.onmouseleave = function() { closeBtn.style.opacity = '0.5'; closeBtn.style.background = 'transparent'; };
     closeBtn.onclick = function() {
-      try { sessionStorage.setItem('converseai_welcome_shown', '1'); } catch (e) {}
+      try { sessionStorage.setItem(CAI_WELCOME_KEY, '1'); } catch (e) {}
       if (welcomeCardEl && welcomeCardEl.parentNode) welcomeCardEl.parentNode.removeChild(welcomeCardEl);
       welcomeCardEl = null;
     };
@@ -1171,7 +1180,7 @@ const EMBED_SCRIPT = `
     ctaBtn.onmouseenter = function() { ctaBtn.style.transform = 'translateY(-1px)'; ctaBtn.style.boxShadow = '0 6px 20px ' + primary + '50'; };
     ctaBtn.onmouseleave = function() { ctaBtn.style.transform = 'translateY(0)'; ctaBtn.style.boxShadow = '0 4px 14px ' + primary + '40'; };
     ctaBtn.onclick = function() {
-      try { sessionStorage.setItem('converseai_welcome_shown', '1'); } catch (e) {}
+      try { sessionStorage.setItem(CAI_WELCOME_KEY, '1'); } catch (e) {}
       if (welcomeCardEl && welcomeCardEl.parentNode) welcomeCardEl.parentNode.removeChild(welcomeCardEl);
       welcomeCardEl = null;
       openPanel();
@@ -1286,7 +1295,7 @@ const EMBED_SCRIPT = `
       var containerEl = document.getElementById(containerId);
       if (!containerEl) return;
       root = document.createElement('div');
-      root.id = 'converseai-root';
+      root.id = CAI_ROOT_ID;
       root.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;';
       containerEl.appendChild(root);
       if (!openPanelOnLoad) {
@@ -1333,7 +1342,7 @@ const EMBED_SCRIPT = `
       }
     } else {
       root = document.createElement('div');
-      root.id = 'converseai-root';
+      root.id = CAI_ROOT_ID;
       var pos = config.position || 'bottom-right';
       var b = config.bubble || {};
       var rpad = 24;
@@ -1680,7 +1689,7 @@ const EMBED_SCRIPT = `
     } else {
       var ppos = config.position || 'bottom-right';
       var pbsz = config.bubble && config.bubble.size ? config.bubble.size + 12 : 68;
-      /** When there is no data-container-id, #converseai-root is position:fixed with rpad + widgetInset* — do not add insets again on the panel or the gap doubles (matches chatbot-preview anchor + popup). */
+      /** When there is no data-container-id, the widget root is position:fixed with rpad + widgetInset* — do not add insets again on the panel or the gap doubles (matches chatbot-preview anchor + popup). */
       var panelInsetStack = !!containerId;
       var pyBottom = pbsz + (panelInsetStack ? caiWidgetInset('widgetInsetBottomPx') : 0);
       var pyTop = pbsz + (panelInsetStack ? caiWidgetInset('widgetInsetTopPx') : 0);
@@ -1730,7 +1739,7 @@ const EMBED_SCRIPT = `
         'px;height:' +
         logoSize +
         'px;background:#111111;color:#ffffff;';
-      appendConverseMarkLogo(logoBox, Math.round(logoSize * 0.6));
+      appendAppMarkLogo(logoBox, Math.round(logoSize * 0.6));
       headerLeft.appendChild(logoBox);
     }
     var titleBlock = document.createElement('div');
@@ -2052,10 +2061,10 @@ const EMBED_SCRIPT = `
       var poweredBy = document.createElement('div');
       poweredBy.style.cssText = 'margin-top:8px;text-align:center;';
       var poweredByLink = document.createElement('a');
-      poweredByLink.href = 'https://converseai.com';
+      poweredByLink.href = CAI_HOMEPAGE;
       poweredByLink.target = '_blank';
       poweredByLink.rel = 'noopener noreferrer';
-      poweredByLink.textContent = 'Powered by ConverseAI';
+      poweredByLink.textContent = 'Powered by ' + CAI_APP_NAME;
       poweredByLink.style.cssText = 'font-size:10px;color:#999;text-decoration:none;';
       poweredByLink.onmouseenter = function() { poweredByLink.style.textDecoration = 'underline'; poweredByLink.style.color = '#666'; };
       poweredByLink.onmouseleave = function() { poweredByLink.style.textDecoration = 'none'; poweredByLink.style.color = '#999'; };
@@ -2550,9 +2559,15 @@ const EMBED_SCRIPT = `
 const VOICE_SIGNALING_WS_JSON = JSON.stringify(
   process.env.NEXT_PUBLIC_VOICE_SIGNALING_WS_URL ?? ''
 );
+const APP_NAME_JSON = JSON.stringify(APP_NAME);
+const APP_SLUG_JSON = JSON.stringify(APP_SLUG);
+const APP_HOMEPAGE_JSON = JSON.stringify(APP_HOMEPAGE_URL);
 
 export async function GET(_request: NextRequest) {
-  const body = EMBED_SCRIPT.replace(/__CAI_VOICE_WS__/g, VOICE_SIGNALING_WS_JSON);
+  const body = EMBED_SCRIPT.replace(/__CAI_VOICE_WS__/g, VOICE_SIGNALING_WS_JSON)
+    .replace(/__CAI_APP_NAME__/g, APP_NAME_JSON)
+    .replace(/__CAI_APP_SLUG__/g, APP_SLUG_JSON)
+    .replace(/__CAI_HOMEPAGE__/g, APP_HOMEPAGE_JSON);
   return new Response(body, {
     headers: {
       'Content-Type': 'application/javascript; charset=utf-8',

@@ -9,6 +9,7 @@ import { DashboardOverviewCards } from './dashboard-overview-cards';
 import { ServiceStatusPanel } from '@/components/modules/system/service-status-panel';
 import { Plus, FolderPlus, MessageSquare, Code2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { APP_NAME } from '@/lib/app-branding';
 
 export function DashboardContent() {
   const { data, isLoading } = trpc.projects.list.useQuery(
@@ -44,7 +45,7 @@ export function DashboardContent() {
                 Create your first project
               </h1>
               <p className="mt-3 max-w-xl text-base leading-relaxed text-muted-foreground">
-                Everything in Converse lives in a project: your chatbot, agents, integrations, and analytics. Create a project to add a chatbot and embed it on your site.
+                Everything in {APP_NAME} lives in a project: your chatbot, agents, integrations, and analytics. Create a project to add a chatbot and embed it on your site.
               </p>
 
               {/* Steps */}

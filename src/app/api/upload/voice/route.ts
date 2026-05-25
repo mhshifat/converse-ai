@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getValidatedSessionUser } from '@/server/session-validation';
 import { getUploadService } from '@/server/upload/upload-service';
+import { APP_SLUG } from '@/lib/app-branding';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB for voice messages
 
@@ -40,7 +41,7 @@ export async function POST(request: Request) {
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
     const name = file.name || `voice-${Date.now()}.webm`;
-    const result = await uploadService.upload(buffer, name, { folder: 'converseai-voice' });
+    const result = await uploadService.upload(buffer, name, { folder: `${APP_SLUG}-voice` });
     return NextResponse.json({ url: result.url });
   } catch (err) {
     console.error('[Upload] Voice upload failed:', err);

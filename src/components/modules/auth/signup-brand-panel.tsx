@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { ConverseLogo } from '@/components/shared/converse-logo';
+import { AppLogo } from '@/components/shared/app-logo';
 
 const features = [
   {
@@ -57,7 +57,7 @@ export function SignupBrandPanel() {
 
       {/* Top: logo */}
       <div className="relative z-10" style={{ animation: 'signup-fade-in-up 0.6s ease-out forwards' }}>
-        <ConverseLogo size={32} animated className="text-primary-foreground" />
+        <AppLogo size={32} animated className="text-primary-foreground" />
       </div>
 
       {/* Center: headline */}

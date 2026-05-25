@@ -1,4 +1,5 @@
 import { IronSessionOptions } from 'iron-session';
+import { APP_SLUG } from './app-branding';
 
 export interface SessionUser {
   id: string;
@@ -22,7 +23,7 @@ if (!secret || secret.length < 32) {
 
 export const sessionOptions: IronSessionOptions = {
   password: secret,
-  cookieName: 'converseai_session',
+  cookieName: `${APP_SLUG}_session`,
   cookieOptions: {
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',

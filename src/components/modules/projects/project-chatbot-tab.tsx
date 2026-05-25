@@ -28,6 +28,7 @@ import {
   type WidgetPathInsetRule,
   WIDGET_PATH_INSETS_MAX,
 } from '@/lib/chatbot-widget-config';
+import { APP_NAME } from '@/lib/app-branding';
 import { ChatbotPreview } from './chatbot-preview';
 import { ColorPicker } from '@/components/ui/color-picker';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
@@ -264,7 +265,7 @@ export function ProjectChatbotTab({ projectId, initialChatbot }: ProjectChatbotT
               checked={config.showPoweredBy}
               onCheckedChange={(v) => patch('showPoweredBy', v)}
             />
-            <Label>Show &quot;Powered by ConverseAI&quot; in widget footer</Label>
+            <Label>Show &quot;Powered by {APP_NAME}&quot; in widget footer</Label>
           </div>
         </Section>
 

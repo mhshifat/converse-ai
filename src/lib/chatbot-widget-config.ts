@@ -24,7 +24,7 @@ export interface HeaderConfig {
   fontSize: number;
   title: string;
   showCloseButton: boolean;
-  /** Company logo URL (optional). If not set, embed can show default/converse logo. */
+  /** Company logo URL (optional). If not set, embed can show the default app logo. */
   logoUrl?: string;
   /** Logo size in px for header */
   logoSize?: number;
@@ -89,7 +89,7 @@ export interface ChatbotWidgetConfig {
   widgetInsetLeftPx: number;
   welcomeMessage: string;
   voiceEnabled: boolean;
-  /** Show "Powered by ConverseAI" link in widget footer. Default true for attribution/marketing. */
+  /** Show "Powered by {APP_NAME}" link in widget footer. Default true for attribution/marketing. */
   showPoweredBy: boolean;
   /** Rating after conversation: 'thumbs' (up/down) or 'nps' (0-10). */
   defaultRatingType: 'thumbs' | 'nps';
